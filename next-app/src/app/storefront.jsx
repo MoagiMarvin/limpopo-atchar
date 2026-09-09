@@ -33,6 +33,15 @@ export default function Storefront() {
   const visibleProducts = useMemo(() => products.filter((product) => product.active !== false), [products]);
   const total = cart.reduce((sum, item) => sum + Number(item.price), 0);
 
+  function downloadReceipt(order) {
+    const receipt = ["LIMPOPO ATCHAR RECEIPT", `Order: ${order.order_number}`, `Confirmation code: ${order.confirmation_code}`, "", `Customer: ${order.customer_name}`, `Phone: ${order.phone}`, `Delivery: ${order.address}, ${order.city}`, "Payment: Cash on Delivery", ...order.items.map((item) => `- ${item.name} (${item.size}) - R${item.price}`), `Delivery fee: R${order.delivery_fee}`, `Total: R${order.total}`].join("\n");
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(new Blob([receipt], { type: "text/plain" }));
+    link.download = `${order.order_number}-receipt.txt`;
+    link.click();
+    URL.revokeObjectURL(link.href);
+  }
+
   function addToCart(product) {
     if (product.stock <= 0) return setNotice("This size is out of stock.");
     const next = [...cart, product];
@@ -46,10 +55,11 @@ export default function Storefront() {
     setBusy(true);
     const form = new FormData(event.currentTarget);
     const code = `LP-${Math.floor(100000 + Math.random() * 900000)}`;
-    const order = { id: crypto.randomUUID(), order_number: `LP-${Date.now().toString().slice(-6)}`, confirmation_code: code, customer_name: String(form.get("name")), phone: String(form.get("phone")), city: String(form.get("city")), address: String(form.get("address")), notes: String(form.get("notes") || ""), total: total + deliveryFee, payment_method: "cod", payment_status: "Pending", delivery_fee: deliveryFee };
+    const order = { id: crypto.randomUUID(), order_number: `LP-${Date.now().toString().slice(-6)}`, confirmation_code: code, customer_name: String(form.get("name")), phone: String(form.get("phone")), city: String(form.get("city")), address: String(form.get("address")), notes: String(form.get("notes") || ""), items: [...cart], total: total + deliveryFee, payment_method: "cod", payment_status: "Pending", delivery_fee: deliveryFee };
     const receipt = ["LIMPOPO ATCHAR ORDER", `Confirmation code: ${code}`, "", `Customer: ${order.customer_name}`, `Phone: ${order.phone}`, `Delivery: ${order.address}, ${order.city}`, "Payment: Cash on Delivery", `Delivery fee: R${deliveryFee}`, "", "Items:", ...cart.map((item) => `- ${item.name} ${item.size} - R${item.price}`), "", `Total: R${order.total}`].join("\n");
     const whatsappWindow = window.open(`https://wa.me/27637326719?text=${encodeURIComponent(receipt)}`, "_blank");
-    setCart([]); setCartOpen(false); setCheckoutOpen(false); setSuccess({ code, total: order.total }); setBusy(false);
+    window.localStorage.setItem("lp_last_receipt", JSON.stringify(order));
+    setCart([]); setCartOpen(false); setCheckoutOpen(false); setSuccess({ code, order }); setBusy(false);
     if (supabase) {
       try {
         const saved = await supabase.from("orders").insert(order);
@@ -71,10 +81,10 @@ export default function Storefront() {
       <section className="section products-section" id="shop"><h2>Our Mango Atchar</h2><div className="ornament">— ❧ —</div><div className="products">{visibleProducts.map((product) => <article className="product" key={product.id || `${product.name}-${product.size}`}><span className="product-tag">{product.badge}</span><div className="product-photo"><img src={product.image || "/mango-atchar.png"} alt={`${product.name} ${product.size}`} /></div><div className="product-info"><h3>{product.name}</h3><p className="size-label">Container size: <b>{product.size}</b></p><div className="price">R{product.price}</div><button className="add" onClick={() => addToCart(product)} disabled={product.stock <= 0}>{product.stock <= 0 ? "Out of stock" : "🛒 Add to Cart"}</button></div></article>)}</div></section>
       <section className="story" id="story"><h2>Our Story</h2><p>Traditional taste, homemade with love. Limpopo Atchar brings bold mango flavour to your table in convenient plastic tubs.</p></section><section className="story" id="about"><h2>About Us</h2><p>Fresh mangoes, traditional preparation and small-batch goodness.</p></section><section className="story" id="recipes"><h2>Recipes</h2><p>Serving ideas and recipes coming soon.</p></section>
     </main>
-    <footer id="contact"><strong>LIMPOPO ATCHAR</strong><a href="https://wa.me/27637326719" target="_blank" rel="noreferrer">WhatsApp Orders: 063 732 6719</a></footer>
+    <footer id="contact"><strong>LIMPOPO ATCHAR</strong><a href="https://wa.me/27637326719" target="_blank" rel="noreferrer">WhatsApp Orders: 063 732 6719</a><a href="/admin">Admin</a></footer>
     {cartOpen && <div className="overlay" onClick={() => setCartOpen(false)}><aside className="drawer" onClick={(event) => event.stopPropagation()}><button className="close" onClick={() => setCartOpen(false)}>×</button><h2>Your Cart</h2>{cart.length ? cart.map((item, index) => <div className="cart-row" key={`${item.size}-${index}`}><span>{item.name} ({item.size})</span><b>R{item.price}</b></div>) : <p>Your cart is empty.</p>}<h3>Total: R{total}</h3><button className="primary full" onClick={() => { setCartOpen(false); setCheckoutOpen(true); }} disabled={!cart.length}>Checkout</button></aside></div>}
     {checkoutOpen && <div className="overlay"><form className="dialog" onSubmit={submitOrder}><button type="button" className="close" onClick={() => setCheckoutOpen(false)}>×</button><h2>Checkout</h2><input name="name" required placeholder="Full name" /><input name="phone" required placeholder="Phone number" /><input name="city" required placeholder="Town / City" /><textarea name="address" required placeholder="Delivery address" /><textarea name="notes" placeholder="Order notes (optional)" /><p className="payment">Cash on Delivery · Delivery fee: R{deliveryFee}</p><button className="primary full" disabled={busy}>{busy ? "Placing order..." : "Place Order"}</button></form></div>}
-    {success && <div className="overlay"><div className="dialog success"><h2>Order Received</h2><p>Keep this confirmation code for delivery.</p><code>{success.code}</code><strong>Total: R{success.total}</strong><button className="primary full" onClick={() => setSuccess(null)}>Continue Shopping</button></div></div>}
+    {success && <div className="overlay"><div className="dialog success"><h2>Order Receipt</h2><p>Keep this confirmation code for delivery.</p><code>{success.code}</code><div className="receipt-details"><p><b>Order:</b> {success.order.order_number}</p><p><b>Customer:</b> {success.order.customer_name}</p><p><b>Delivery:</b> {success.order.address}, {success.order.city}</p><p><b>Payment:</b> Cash on Delivery</p>{success.order.items.map((item, index) => <p key={`${item.size}-${index}`}>{item.name} ({item.size}) <b>R{item.price}</b></p>)}<p><b>Delivery fee:</b> R{success.order.delivery_fee}</p><strong>Total: R{success.order.total}</strong></div><div className="receipt-actions"><button className="primary" onClick={() => downloadReceipt(success.order)}>Download Receipt</button><button className="secondary" onClick={() => window.print()}>Print / Save PDF</button><button className="secondary" onClick={() => setSuccess(null)}>Continue Shopping</button></div></div></div>}
     {notice && <button className="toast" onClick={() => setNotice("")}>{notice}</button>}
   </>;
 }
