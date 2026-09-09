@@ -5,7 +5,7 @@ import Link from "next/link";
 import { createClient } from "@supabase/supabase-js";
 
 const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY);
-const emptyProduct = { name: "New Atchar", size: "500g", price: 0, badge: "", stock: 0, image: "/mango-atchar.png", active: true };
+const emptyProduct = { name: "Mango Atchar", category: "Mango Atchar", size: "500g", price: 0, badge: "", stock: 0, image: "/mango-atchar.png", active: true };
 const statuses = ["New", "Confirmed", "Preparing", "Out for delivery", "Delivered", "Cancelled"];
 
 export default function AdminPage() {
@@ -47,7 +47,7 @@ export default function AdminPage() {
 
   async function saveProduct(product) {
     setBusy(true);
-    const payload = { name: product.name, size: product.size, price: Number(product.price), badge: product.badge || "", stock: Number(product.stock), image: product.image || "/mango-atchar.png", active: product.active !== false };
+    const payload = { name: product.name, category: product.category || product.name, size: product.size, price: Number(product.price), badge: product.badge || "", stock: Number(product.stock), image: product.image || "/mango-atchar.png", active: product.active !== false };
     const result = product.id ? await supabase.from("products").update(payload).eq("id", product.id) : await supabase.from("products").insert(payload);
     setBusy(false);
     if (result.error) return setNotice(result.error.message);
@@ -78,6 +78,23 @@ export default function AdminPage() {
 
 function ProductEditor({ product, busy, onSave, onDelete }) {
   const [draft, setDraft] = useState(product);
+  const [uploading, setUploading] = useState(false);
   const change = (field, value) => setDraft({ ...draft, [field]: value });
-  return <article className="admin-product-editor"><img src={draft.image || "/mango-atchar.png"} alt="" onError={(event) => { event.currentTarget.src = "/mango-atchar-fallback.png"; }} /><label>Name<input value={draft.name} onChange={(event) => change("name", event.target.value)} /></label><label>Container size<input value={draft.size} onChange={(event) => change("size", event.target.value)} /></label><label>Price (R)<input type="number" min="0" value={draft.price} onChange={(event) => change("price", event.target.value)} /></label><label>Stock<input type="number" min="0" value={draft.stock} onChange={(event) => change("stock", event.target.value)} /></label><label>Badge<input value={draft.badge || ""} onChange={(event) => change("badge", event.target.value)} placeholder="New or Best Seller" /></label><label>Image path<input value={draft.image || ""} onChange={(event) => change("image", event.target.value)} /></label><label>Visibility<select value={draft.active === false ? "hidden" : "visible"} onChange={(event) => change("active", event.target.value === "visible")}><option value="visible">Visible</option><option value="hidden">Hidden</option></select></label><div className="editor-actions"><button className="admin-primary" onClick={() => onSave(draft)} disabled={busy}>Save</button><button onClick={onDelete}>Delete</button></div></article>;
+  async function handleImageChange(event) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    setUploading(true);
+    const extension = file.name.split(".").pop()?.toLowerCase() || "jpg";
+    const path = `${draft.id || crypto.randomUUID()}/${crypto.randomUUID()}.${extension}`;
+    const { error } = await supabase.storage.from("product-images").upload(path, file, { contentType: file.type, upsert: false });
+    if (error) {
+      setUploading(false);
+      return;
+    }
+    const { data } = supabase.storage.from("product-images").getPublicUrl(path);
+    const url = data.publicUrl;
+    setUploading(false);
+    if (url) change("image", url);
+  }
+  return <details className="admin-product-editor" open={!product.id}><summary style={{ display: "flex", alignItems: "center", gap: "12px", cursor: "pointer", listStyle: "none" }}><img style={{ width: "72px", height: "72px", objectFit: "cover", background: "var(--cream)" }} src={draft.image || "/mango-atchar.png"} alt="" onError={(event) => { event.currentTarget.src = "/mango-atchar-fallback.png"; }} /><span><b>{draft.name}</b><small style={{ display: "block", marginTop: "5px", color: "var(--muted)" }}>{draft.size} · R{draft.price} · {draft.stock} in stock</small></span></summary><div className="product-editor-fields"><label>Name<input value={draft.name} onChange={(event) => change("name", event.target.value)} /></label><label>Container size<input value={draft.size} onChange={(event) => change("size", event.target.value)} /></label><label>Price (R)<input type="number" min="0" value={draft.price} onChange={(event) => change("price", event.target.value)} /></label><label>Stock<input type="number" min="0" value={draft.stock} onChange={(event) => change("stock", event.target.value)} /></label><label>Badge<input value={draft.badge || ""} onChange={(event) => change("badge", event.target.value)} placeholder="New or Best Seller" /></label><label>Product image<input type="file" accept="image/png,image/jpeg,image/webp" onChange={handleImageChange} disabled={busy || uploading} />{uploading && <small>Uploading image...</small>}<small>Choose an image from your device. It will be saved in product storage.</small></label><label>Visibility<select value={draft.active === false ? "hidden" : "visible"} onChange={(event) => change("active", event.target.value === "visible")}><option value="visible">Visible</option><option value="hidden">Hidden</option></select></label><div className="editor-actions"><button className="admin-primary" onClick={() => onSave(draft)} disabled={busy || uploading}>Save</button><button onClick={onDelete}>Delete</button></div></div></details>;
 }
