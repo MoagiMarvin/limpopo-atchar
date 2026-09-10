@@ -39,11 +39,17 @@ export default function Storefront() {
     loadProducts();
   }, []);
 
-  // Restore cart from localStorage after hydration (client-only, avoids SSR mismatch)
+  // Restore cart AND last receipt from localStorage after hydration (client-only, avoids SSR mismatch)
   useEffect(() => {
     try {
-      const saved = window.localStorage.getItem("lp_cart");
-      if (saved) setCart(JSON.parse(saved));
+      const savedCart = window.localStorage.getItem("lp_cart");
+      if (savedCart) setCart(JSON.parse(savedCart));
+
+      const savedReceipt = window.localStorage.getItem("lp_last_receipt");
+      if (savedReceipt) {
+        const order = JSON.parse(savedReceipt);
+        setSuccess({ code: order.confirmation_code, order });
+      }
     } catch { /* storage unavailable */ }
   }, []);
 
@@ -585,7 +591,7 @@ export default function Storefront() {
             <div className="receipt-actions">
               <button className="primary" onClick={() => downloadReceipt(success.order)}>Download Receipt</button>
               <button className="secondary" onClick={() => window.print()}>Print / Save PDF</button>
-              <button className="secondary" onClick={() => setSuccess(null)}>Continue Shopping</button>
+              <button className="secondary" onClick={() => { window.localStorage.removeItem("lp_last_receipt"); setSuccess(null); }}>Continue Shopping</button>
             </div>
           </div>
         </div>
