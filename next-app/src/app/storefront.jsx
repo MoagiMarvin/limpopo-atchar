@@ -213,24 +213,18 @@ export default function Storefront() {
     setSuccess({ code, order });
     setBusy(false);
 
-    if (supabase) {
-      try {
-        const saved = await supabase.from("orders").insert(order);
-        if (saved.error) throw saved.error;
-        const items = cart.map((item) => ({
-          order_id: order.id,
-          product_id: item.id || null,
-          product_name: item.name,
-          size: item.size,
-          price: item.price,
-          quantity: item.quantity
-        }));
-        await supabase.from("order_items").insert(items);
-      } catch {
-        setNotice("Order confirmed. Online sync needs attention.");
-      }
+    // Sync order with backend database via API route (reliable on Vercel)
+    try {
+      await fetch("/api/orders/create", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(order),
+      });
+    } catch (e) {
+      console.warn("API order sync notice:", e);
     }
-    if (!whatsappWindow) setNotice("Order confirmed. Please open WhatsApp and send receipt manually.");
+
+    if (!whatsappWindow) setNotice("Order confirmed! Please click Download Receipt below or send on WhatsApp.");
   }
 
   async function submitOrder(event) {

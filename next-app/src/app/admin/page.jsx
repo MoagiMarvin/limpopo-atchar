@@ -69,28 +69,39 @@ export default function AdminPage() {
     let dbProducts = [];
     let dbOrders = [];
 
+    // Fetch products & orders via server API and client
+    try {
+      const ordersRes = await fetch("/api/orders/list");
+      if (ordersRes.ok) {
+        const json = await ordersRes.json();
+        if (json.orders) dbOrders = json.orders;
+      }
+    } catch (e) {
+      console.warn("API orders fetch notice:", e);
+    }
+
     if (supabase) {
       try {
-        const [{ data: productData }, { data: orderData }] = await Promise.all([
-          supabase.from("products").select("*").order("category").order("name").order("price"),
-          supabase.from("orders").select("*, order_items(*)").order("created_at", { ascending: false }),
-        ]);
+        const { data: productData } = await supabase.from("products").select("*").order("category").order("name").order("price");
         if (productData?.length) dbProducts = productData;
-        if (orderData) {
-          dbOrders = orderData.map((o) => {
-            // Map order_items to items array if items column is not present/populated
-            const items = (Array.isArray(o.items) && o.items.length) 
-              ? o.items 
-              : (Array.isArray(o.order_items) && o.order_items.length)
-                ? o.order_items.map((i) => ({
-                    name: i.product_name || i.name,
-                    size: i.size,
-                    price: Number(i.price),
-                    quantity: Number(i.quantity),
-                  }))
-                : [];
-            return { ...o, items };
-          });
+
+        if (!dbOrders.length) {
+          const { data: orderData } = await supabase.from("orders").select("*, order_items(*)").order("created_at", { ascending: false });
+          if (orderData) {
+            dbOrders = orderData.map((o) => {
+              const items = (Array.isArray(o.items) && o.items.length) 
+                ? o.items 
+                : (Array.isArray(o.order_items) && o.order_items.length)
+                  ? o.order_items.map((i) => ({
+                      name: i.product_name || i.name,
+                      size: i.size,
+                      price: Number(i.price),
+                      quantity: Number(i.quantity),
+                    }))
+                  : [];
+              return { ...o, items };
+            });
+          }
         }
       } catch (e) {
         console.warn("Supabase fetch notice:", e);
