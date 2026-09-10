@@ -213,7 +213,46 @@ export default function Storefront() {
     setSuccess({ code, order });
     setBusy(false);
 
-    // Sync order with backend database via API route (reliable on Vercel)
+    // Direct Supabase insert (restored exactly as before)
+    if (supabase) {
+      try {
+        const dbOrderPayload = {
+          id: order.id,
+          order_number: order.order_number,
+          confirmation_code: order.confirmation_code,
+          customer_name: order.customer_name,
+          phone: order.phone,
+          city: order.city,
+          address: order.address,
+          notes: order.notes,
+          total: order.total,
+          payment_method: order.payment_method,
+          payment_status: order.payment_status,
+          paystack_reference: order.paystack_reference,
+          delivery_fee: order.delivery_fee,
+        };
+        const saved = await supabase.from("orders").insert(dbOrderPayload);
+        if (saved.error) {
+          console.warn("Direct orders insert attempt 1 error:", saved.error.message);
+          // Try with items array if schema expects items column
+          await supabase.from("orders").insert(order);
+        }
+
+        const itemsPayload = cart.map((item) => ({
+          order_id: order.id,
+          product_id: item.id && !String(item.id).startsWith("temp") ? item.id : null,
+          product_name: item.name,
+          size: item.size,
+          price: item.price,
+          quantity: item.quantity
+        }));
+        await supabase.from("order_items").insert(itemsPayload);
+      } catch (err) {
+        console.warn("Direct Supabase insert notice:", err);
+      }
+    }
+
+    // Sync order with backend database API as secondary layer
     try {
       await fetch("/api/orders/create", {
         method: "POST",
