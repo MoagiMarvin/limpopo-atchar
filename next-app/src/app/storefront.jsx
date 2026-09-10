@@ -39,6 +39,25 @@ export default function Storefront() {
     loadProducts();
   }, []);
 
+  // Restore cart from localStorage after hydration (client-only, avoids SSR mismatch)
+  useEffect(() => {
+    try {
+      const saved = window.localStorage.getItem("lp_cart");
+      if (saved) setCart(JSON.parse(saved));
+    } catch { /* storage unavailable */ }
+  }, []);
+
+  // Save cart to localStorage whenever it changes — survives page refresh
+  useEffect(() => {
+    try {
+      if (cart.length > 0) {
+        window.localStorage.setItem("lp_cart", JSON.stringify(cart));
+      } else {
+        window.localStorage.removeItem("lp_cart");
+      }
+    } catch { /* storage unavailable */ }
+  }, [cart]);
+
   const categoryItems = useMemo(() => {
     const map = new Map();
     map.set("All", "/mango-atchar.png");
