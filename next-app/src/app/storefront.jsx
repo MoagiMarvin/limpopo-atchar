@@ -202,6 +202,11 @@ export default function Storefront() {
 
     const whatsappWindow = window.open(`https://wa.me/27637326719?text=${encodeURIComponent(receipt)}`, "_blank");
     window.localStorage.setItem("lp_last_receipt", JSON.stringify(order));
+    try {
+      const existingOrders = JSON.parse(window.localStorage.getItem("lp_orders") || "[]");
+      const updatedOrders = [order, ...existingOrders.filter((o) => o.id !== order.id)];
+      window.localStorage.setItem("lp_orders", JSON.stringify(updatedOrders.slice(0, 50)));
+    } catch { /* storage fallback */ }
     setCart([]);
     setCartOpen(false);
     setCheckoutOpen(false);

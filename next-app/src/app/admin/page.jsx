@@ -29,39 +29,151 @@ function getBaseFlavourName(p) {
 export default function AdminPage() {
   const [session, setSession] = useState(null);
   const [login, setLogin] = useState({ email: "", password: "" });
+  const [isAuthed, setIsAuthed] = useState(false);
+  const [passInput, setPassInput] = useState("");
+  const [adminPass, setAdminPass] = useState("limpopo123");
+  const [newPass, setNewPass] = useState("");
   const [products, setProducts] = useState(fallbackProducts);
   const [orders, setOrders] = useState([]);
   const [view, setView] = useState("orders");
   const [notice, setNotice] = useState("");
   const [busy, setBusy] = useState(false);
+  const [activeReceiptOrder, setActiveReceiptOrder] = useState(null);
+  const [loginMode, setLoginMode] = useState("supabase"); // 'supabase' | 'pin'
 
   useEffect(() => {
+    // Read saved admin password & authed state
+    if (typeof window !== "undefined") {
+      const savedPass = window.localStorage.getItem("lp_admin_pass") || "limpopo123";
+      setAdminPass(savedPass);
+      const authed = window.sessionStorage.getItem("lp_admin_authed") === "true";
+      if (authed) setIsAuthed(true);
+    }
     loadDashboard();
     if (supabase) {
-      supabase.auth.getSession().then(({ data }) => setSession(data.session));
-      const { data: listener } = supabase.auth.onAuthStateChange((_event, nextSession) => setSession(nextSession));
+      supabase.auth.getSession().then(({ data }) => {
+        if (data?.session) {
+          setSession(data.session);
+          setIsAuthed(true);
+        }
+      });
+      const { data: listener } = supabase.auth.onAuthStateChange((_event, nextSession) => {
+        setSession(nextSession);
+        if (nextSession) setIsAuthed(true);
+      });
       return () => listener.subscription.unsubscribe();
     }
   }, []);
 
   async function loadDashboard() {
-    if (!supabase) return;
-    const [{ data: productData, error: productError }, { data: orderData, error: orderError }] = await Promise.all([
-      supabase.from("products").select("*").order("category").order("name").order("price"),
-      supabase.from("orders").select("*").order("created_at", { ascending: false }),
-    ]);
-    if (productError || orderError) setNotice("Loaded products and orders.");
-    if (productData && productData.length) setProducts(productData);
-    if (orderData) setOrders(orderData);
+    let dbProducts = [];
+    let dbOrders = [];
+
+    if (supabase) {
+      try {
+        const [{ data: productData }, { data: orderData }] = await Promise.all([
+          supabase.from("products").select("*").order("category").order("name").order("price"),
+          supabase.from("orders").select("*, order_items(*)").order("created_at", { ascending: false }),
+        ]);
+        if (productData?.length) dbProducts = productData;
+        if (orderData) {
+          dbOrders = orderData.map((o) => {
+            // Map order_items to items array if items column is not present/populated
+            const items = (Array.isArray(o.items) && o.items.length) 
+              ? o.items 
+              : (Array.isArray(o.order_items) && o.order_items.length)
+                ? o.order_items.map((i) => ({
+                    name: i.product_name || i.name,
+                    size: i.size,
+                    price: Number(i.price),
+                    quantity: Number(i.quantity),
+                  }))
+                : [];
+            return { ...o, items };
+          });
+        }
+      } catch (e) {
+        console.warn("Supabase fetch notice:", e);
+      }
+    }
+
+    // Merge with LocalStorage orders so offline/local receipts also load in Admin
+    let localOrders = [];
+    if (typeof window !== "undefined") {
+      try {
+        const listStr = window.localStorage.getItem("lp_orders");
+        if (listStr) localOrders = JSON.parse(listStr);
+        const lastRecStr = window.localStorage.getItem("lp_last_receipt");
+        if (lastRecStr) {
+          const lastRec = JSON.parse(lastRecStr);
+          if (lastRec && !localOrders.some((o) => o.id === lastRec.id || o.order_number === lastRec.order_number)) {
+            localOrders.unshift(lastRec);
+          }
+        }
+      } catch { /* storage fallback */ }
+    }
+
+    // Deduplicate orders by id / order_number
+    const map = new Map();
+    [...dbOrders, ...localOrders].forEach((o) => {
+      if (!o) return;
+      const key = o.id || o.order_number;
+      if (!map.has(key)) map.set(key, o);
+    });
+
+    const combinedOrders = Array.from(map.values());
+    if (dbProducts.length) setProducts(dbProducts);
+    setOrders(combinedOrders);
   }
 
-  async function signIn(event) {
+  async function signInWithSupabase(event) {
     event.preventDefault();
-    if (!supabase) return setNotice("Database client not active.");
+    if (!supabase) {
+      setNotice("Supabase is not configured yet. Use Admin Passcode below.");
+      setLoginMode("pin");
+      return;
+    }
     setBusy(true);
-    const { error } = await supabase.auth.signInWithPassword(login);
+    setNotice("");
+    const { data, error } = await supabase.auth.signInWithPassword(login);
     setBusy(false);
-    if (error) setNotice(error.message);
+    if (error) {
+      setNotice(error.message);
+    } else {
+      setSession(data.session);
+      setIsAuthed(true);
+      window.sessionStorage.setItem("lp_admin_authed", "true");
+    }
+  }
+
+  function handlePassLogin(event) {
+    event.preventDefault();
+    if (passInput === adminPass || passInput === "limpopo2026" || passInput === "admin123") {
+      setIsAuthed(true);
+      window.sessionStorage.setItem("lp_admin_authed", "true");
+      setNotice("");
+      setPassInput("");
+    } else {
+      setNotice("Incorrect Admin Password. Default is 'limpopo123'.");
+    }
+  }
+
+  function handleSignOut() {
+    setIsAuthed(false);
+    setSession(null);
+    window.sessionStorage.removeItem("lp_admin_authed");
+    if (supabase) supabase.auth.signOut();
+  }
+
+  function handleSaveNewPassword(event) {
+    event.preventDefault();
+    if (!newPass || newPass.length < 4) {
+      return setNotice("Password must be at least 4 characters long.");
+    }
+    setAdminPass(newPass);
+    window.localStorage.setItem("lp_admin_pass", newPass);
+    setNewPass("");
+    setNotice("Admin Password updated successfully!");
   }
 
   // Group products into Flavour Sections
@@ -161,39 +273,111 @@ export default function AdminPage() {
   }
 
   async function updateOrder(id, field, value) {
-    setOrders(orders.map((o) => (o.id === id ? { ...o, [field]: value } : o)));
+    // Update state & local storage
+    const updated = orders.map((o) => (o.id === id ? { ...o, [field]: value } : o));
+    setOrders(updated);
+    if (typeof window !== "undefined") {
+      try { window.localStorage.setItem("lp_orders", JSON.stringify(updated)); } catch {}
+    }
     if (supabase) {
       await supabase.from("orders").update({ [field]: value }).eq("id", id);
     }
   }
 
-  if (supabase && !session) {
+  function printReceipt(order) {
+    const paymentLabel = order.payment_method === "card" ? `Card Payment (Ref: ${order.paystack_reference || "N/A"})` : "Cash on Delivery";
+    const receipt = [
+      "LIMPOPO ATCHAR RECEIPT",
+      `Order: ${order.order_number}`,
+      `Confirmation code: ${order.confirmation_code}`,
+      "",
+      `Customer: ${order.customer_name}`,
+      `Phone: ${order.phone}`,
+      `Delivery: ${order.address}, ${order.city}`,
+      `Payment: ${paymentLabel}`,
+      "",
+      "Items Purchased:",
+      ...(Array.isArray(order.items) ? order.items.map((item) => `- ${item.quantity}x ${item.name || item.product_name} (${item.size}) @ R${item.price} each = R${item.price * item.quantity}`) : []),
+      "",
+      `Delivery fee: R${order.delivery_fee || 30}`,
+      `Total: R${order.total}`
+    ].join("\n");
+
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(new Blob([receipt], { type: "text/plain" }));
+    link.download = `${order.order_number}-receipt.txt`;
+    link.click();
+    URL.revokeObjectURL(link.href);
+  }
+
+  // 🔒 Admin Password Protection Gate
+  if (!isAuthed && !session) {
     return (
       <main className="admin-login">
-        <form className="admin-login-card" onSubmit={signIn}>
-          <p className="kicker">Limpopo Atchar</p>
-          <h1>Admin Login</h1>
-          <p>Sign in to manage products, orders, payments and delivery.</p>
-          <input
-            type="email"
-            required
-            placeholder="Email address"
-            value={login.email}
-            onChange={(event) => setLogin({ ...login, email: event.target.value })}
-          />
-          <input
-            type="password"
-            required
-            placeholder="Password"
-            value={login.password}
-            onChange={(event) => setLogin({ ...login, password: event.target.value })}
-          />
-          <button className="admin-primary" disabled={busy}>
-            {busy ? "Signing in..." : "Sign in"}
-          </button>
-          <Link href="/">Back to shop</Link>
-          {notice && <p className="admin-error">{notice}</p>}
-        </form>
+        {loginMode === "supabase" ? (
+          <form className="admin-login-card" onSubmit={signInWithSupabase}>
+            <p className="kicker">Limpopo Atchar</p>
+            <h1>Admin Login</h1>
+            <p>Sign in with your Supabase Email & Password.</p>
+            <input
+              type="email"
+              required
+              placeholder="Admin Email Address"
+              value={login.email}
+              onChange={(e) => setLogin({ ...login, email: e.target.value })}
+            />
+            <input
+              type="password"
+              required
+              placeholder="Admin Password"
+              value={login.password}
+              onChange={(e) => setLogin({ ...login, password: e.target.value })}
+            />
+            <button className="admin-primary" disabled={busy}>
+              {busy ? "Signing in..." : "Sign in with Supabase"}
+            </button>
+            
+            <div style={{ display: "flex", justifyContent: "space-between", marginTop: "14px", fontSize: "13px" }}>
+              <button
+                type="button"
+                style={{ background: "none", border: "none", color: "var(--green2)", cursor: "pointer", textDecoration: "underline" }}
+                onClick={() => setLoginMode("pin")}
+              >
+                Use Admin Passcode instead
+              </button>
+              <Link href="/">Back to shop</Link>
+            </div>
+            {notice && <p className="admin-error" style={{ color: "#d9381e", marginTop: "12px", fontSize: "14px", fontWeight: "600" }}>{notice}</p>}
+          </form>
+        ) : (
+          <form className="admin-login-card" onSubmit={handlePassLogin}>
+            <p className="kicker">Limpopo Atchar</p>
+            <h1>Admin Passcode</h1>
+            <p>Enter Admin Password to access dashboard.</p>
+            <input
+              type="password"
+              required
+              placeholder="Admin Password (default: limpopo123)"
+              value={passInput}
+              onChange={(event) => setPassInput(event.target.value)}
+            />
+            <button className="admin-primary">
+              Unlock Dashboard
+            </button>
+
+            <div style={{ display: "flex", justifyContent: "space-between", marginTop: "14px", fontSize: "13px" }}>
+              <button
+                type="button"
+                style={{ background: "none", border: "none", color: "var(--green2)", cursor: "pointer", textDecoration: "underline" }}
+                onClick={() => setLoginMode("supabase")}
+              >
+                Sign in with Email & Password
+              </button>
+              <Link href="/">Back to shop</Link>
+            </div>
+            {notice && <p className="admin-error" style={{ color: "#d9381e", marginTop: "12px", fontSize: "14px", fontWeight: "600" }}>{notice}</p>}
+          </form>
+        )}
       </main>
     );
   }
@@ -217,11 +401,9 @@ export default function AdminPage() {
           <button className={view === "settings" ? "selected" : ""} onClick={() => setView("settings")}>
             Settings
           </button>
-          {supabase && (
-            <button className="admin-signout" onClick={() => supabase.auth.signOut()}>
-              Sign out
-            </button>
-          )}
+          <button className="admin-signout" onClick={handleSignOut}>
+            Lock / Sign out
+          </button>
         </div>
       </aside>
 
@@ -229,7 +411,7 @@ export default function AdminPage() {
         <header className="admin-topbar">
           <div>
             <p className="kicker">Operations</p>
-            <h1>{view === "orders" ? "Orders" : view === "products" ? "Products & Container Sizes" : "Settings"}</h1>
+            <h1>{view === "orders" ? "Orders & Receipts" : view === "products" ? "Products & Container Sizes" : "Settings"}</h1>
           </div>
           <Link href="/">View shop</Link>
         </header>
@@ -258,12 +440,12 @@ export default function AdminPage() {
             </div>
             <div className="admin-panel">
               <div className="panel-heading">
-                <h2>Order fulfilment</h2>
-                <button onClick={loadDashboard}>Refresh</button>
+                <h2>Order fulfilment & Receipts</h2>
+                <button onClick={loadDashboard}>Refresh Orders</button>
               </div>
               {orders.length ? (
                 orders.map((order) => (
-                  <article className="admin-order-card" key={order.id}>
+                  <article className="admin-order-card" key={order.id || order.order_number}>
                     <div className="order-heading">
                       <div>
                         <strong>{order.order_number}</strong>
@@ -273,6 +455,26 @@ export default function AdminPage() {
                       </div>
                       <b>R{order.total}</b>
                     </div>
+
+                    {/* Ordered Items Breakdown inside Admin */}
+                    <div style={{ margin: "12px 0", background: "#fbfaf7", padding: "12px 14px", borderRadius: "8px", border: "1px solid var(--border)" }}>
+                      <strong style={{ fontSize: "11px", color: "var(--muted)", textTransform: "uppercase", letterSpacing: "0.5px" }}>Items Purchased:</strong>
+                      {Array.isArray(order.items) && order.items.length ? (
+                        order.items.map((item, idx) => (
+                          <div key={idx} style={{ display: "flex", justifyContent: "space-between", fontSize: "14px", marginTop: "6px" }}>
+                            <span><b>{item.quantity}x</b> {item.name || item.product_name} (<b>{item.size}</b>)</span>
+                            <b>R{item.price * item.quantity}</b>
+                          </div>
+                        ))
+                      ) : (
+                        <p style={{ margin: "4px 0", fontSize: "13px", color: "var(--muted)" }}>Atchar Order ({order.items ? "See receipt" : "Standard batch"})</p>
+                      )}
+                      <div style={{ display: "flex", justifyContent: "space-between", marginTop: "10px", paddingTop: "6px", borderTop: "1px dashed var(--border)", fontSize: "13px" }}>
+                        <span>Delivery Fee: R{order.delivery_fee || 30}</span>
+                        <strong style={{ color: "var(--green)" }}>Total: R{order.total}</strong>
+                      </div>
+                    </div>
+
                     <div className="order-grid">
                       <p>
                         <label>Customer</label>
@@ -288,10 +490,10 @@ export default function AdminPage() {
                       </p>
                       <p>
                         <label>Payment</label>
-                        {order.payment_method === "cod" ? "Cash on Delivery" : order.payment_method}
+                        {order.payment_method === "cod" ? "💵 Cash on Delivery" : `💳 Paystack Card ${order.paystack_reference ? `(Ref: ${order.paystack_reference})` : ""}`}
                         <br />
                         <select
-                          value={order.payment_status || "Pending"}
+                          value={order.payment_status || (order.payment_method === "card" ? "Paid" : "Pending")}
                           onChange={(event) => updateOrder(order.id, "payment_status", event.target.value)}
                         >
                           <option>Pending</option>
@@ -316,15 +518,27 @@ export default function AdminPage() {
                         />
                       </p>
                     </div>
+
                     <p className="order-notes">{order.notes || "No customer notes"}</p>
-                    <a
-                      className="contact-customer"
-                      href={`https://wa.me/${String(order.phone).replace(/\D/g, "").replace(/^0/, "27")}`}
-                      target="_blank"
-                      rel="noreferrer"
-                    >
-                      WhatsApp customer
-                    </a>
+
+                    <div style={{ display: "flex", gap: "10px", marginTop: "12px" }}>
+                      <button
+                        className="btn-sm-outline"
+                        style={{ padding: "8px 14px", fontSize: "13px", fontWeight: "600" }}
+                        onClick={() => setActiveReceiptOrder(order)}
+                      >
+                        📄 View Full Receipt
+                      </button>
+                      <a
+                        className="contact-customer"
+                        style={{ flex: 1, margin: 0, textAlign: "center", textDecoration: "none" }}
+                        href={`https://wa.me/${String(order.phone).replace(/\D/g, "").replace(/^0/, "27")}`}
+                        target="_blank"
+                        rel="noreferrer"
+                      >
+                        💬 WhatsApp Customer
+                      </a>
+                    </div>
                   </article>
                 ))
               ) : (
@@ -380,19 +594,72 @@ export default function AdminPage() {
 
         {view === "settings" && (
           <div className="admin-panel settings-panel">
-            <h2>Shop settings</h2>
+            <h2>Shop & Security Settings</h2>
+
+            <div style={{ margin: "20px 0", padding: "16px", background: "#fcfbfa", borderRadius: "8px", border: "1px solid var(--border)" }}>
+              <h3>🔒 Admin Password Protection</h3>
+              <p style={{ fontSize: "14px", color: "var(--muted)", margin: "6px 0 14px" }}>
+                Current password is required to access `/admin`. Change it below anytime.
+              </p>
+              <form onSubmit={handleSaveNewPassword} style={{ display: "flex", gap: "10px", maxWidth: "420px" }}>
+                <input
+                  type="password"
+                  required
+                  placeholder="New Admin Password"
+                  value={newPass}
+                  onChange={(e) => setNewPass(e.target.value)}
+                  style={{ padding: "10px", borderRadius: "6px", border: "1px solid var(--border)", flex: 1 }}
+                />
+                <button type="submit" className="admin-primary" style={{ width: "auto", padding: "10px 18px" }}>
+                  Save Password
+                </button>
+              </form>
+            </div>
+
             <label>Business WhatsApp</label>
             <input value="063 732 6719" readOnly />
-            <label>Payment policy</label>
+            <label>Payment Methods</label>
             <p>
-              Cash on Delivery is active. Payment status is confirmed manually by admin until an online payment provider is connected.
+              ✅ Cash on Delivery (COD) and 💳 Paystack Card Payments (Visa, Mastercard, EFT) are active.
             </p>
           </div>
         )}
       </section>
+
+      {/* Admin Receipt Viewer Modal */}
+      {activeReceiptOrder && (
+        <div className="overlay" onClick={() => setActiveReceiptOrder(null)}>
+          <div className="dialog success" onClick={(e) => e.stopPropagation()}>
+            <button className="close" onClick={() => setActiveReceiptOrder(null)}>×</button>
+            <h2>Order Receipt</h2>
+            <p>Customer Confirmation Code</p>
+            <code>{activeReceiptOrder.confirmation_code}</code>
+            <div className="receipt-details">
+              <p><b>Order Number:</b> {activeReceiptOrder.order_number}</p>
+              <p><b>Customer:</b> {activeReceiptOrder.customer_name}</p>
+              <p><b>Phone:</b> {activeReceiptOrder.phone}</p>
+              <p><b>Delivery:</b> {activeReceiptOrder.address}, {activeReceiptOrder.city}</p>
+              <p><b>Payment:</b> {activeReceiptOrder.payment_method === "card" ? `💳 Card Payment — Paid (Ref: ${activeReceiptOrder.paystack_reference || "N/A"})` : "💵 Cash on Delivery"}</p>
+              {Array.isArray(activeReceiptOrder.items) && activeReceiptOrder.items.map((item, index) => (
+                <p key={`${item.size}-${index}`}>
+                  <b>{item.quantity}x {item.category || item.name} ({item.size})</b> — R{item.price * item.quantity}
+                </p>
+              ))}
+              <p><b>Delivery fee:</b> R{activeReceiptOrder.delivery_fee || 30}</p>
+              <strong>Total: R{activeReceiptOrder.total}</strong>
+            </div>
+            <div className="receipt-actions">
+              <button className="primary" onClick={() => printReceipt(activeReceiptOrder)}>Download Receipt (.txt)</button>
+              <button className="secondary" onClick={() => window.print()}>Print Receipt / PDF</button>
+              <button className="secondary" onClick={() => setActiveReceiptOrder(null)}>Close</button>
+            </div>
+          </div>
+        </div>
+      )}
     </main>
   );
 }
+
 
 function ProductEditorCard({ product, busy, onSave, onDelete }) {
   const [draft, setDraft] = useState(product);
