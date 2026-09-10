@@ -27,6 +27,7 @@ export default function Storefront() {
   const [notice, setNotice] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("All");
   const [busy, setBusy] = useState(false);
+  const [paymentMethod, setPaymentMethod] = useState("cod"); // 'cod' | 'card'
   const deliveryFee = 30;
 
   useEffect(() => {
@@ -113,6 +114,7 @@ export default function Storefront() {
   }
 
   function downloadReceipt(order) {
+    const paymentLabel = order.payment_method === "card" ? "Card Payment (Paid)" : "Cash on Delivery";
     const receipt = [
       "LIMPOPO ATCHAR RECEIPT",
       `Order: ${order.order_number}`,
@@ -121,7 +123,7 @@ export default function Storefront() {
       `Customer: ${order.customer_name}`,
       `Phone: ${order.phone}`,
       `Delivery: ${order.address}, ${order.city}`,
-      "Payment: Cash on Delivery",
+      `Payment: ${paymentLabel}`,
       "",
       "Items Purchased:",
       ...order.items.map((item) => `- ${item.quantity}x ${item.name} (${item.size}) @ R${item.price} each = R${item.price * item.quantity}`),
@@ -137,28 +139,26 @@ export default function Storefront() {
     URL.revokeObjectURL(link.href);
   }
 
-  async function submitOrder(event) {
-    event.preventDefault();
-    if (busy || !cart.length) return;
-    setBusy(true);
-    const form = new FormData(event.currentTarget);
+  async function finaliseOrder({ customerName, phone, city, address, notes, method, paystackRef }) {
     const code = `LP-${Math.floor(100000 + Math.random() * 900000)}`;
     const order = {
       id: crypto.randomUUID(),
       order_number: `LP-${Date.now().toString().slice(-6)}`,
       confirmation_code: code,
-      customer_name: String(form.get("name")),
-      phone: String(form.get("phone")),
-      city: String(form.get("city")),
-      address: String(form.get("address")),
-      notes: String(form.get("notes") || ""),
+      customer_name: customerName,
+      phone,
+      city,
+      address,
+      notes: notes || "",
       items: [...cart],
       total: total + deliveryFee,
-      payment_method: "cod",
-      payment_status: "Pending",
-      delivery_fee: deliveryFee
+      payment_method: method,
+      payment_status: method === "card" ? "Paid" : "Pending",
+      paystack_reference: paystackRef || null,
+      delivery_fee: deliveryFee,
     };
 
+    const paymentLabel = method === "card" ? `Card Payment (Ref: ${paystackRef})` : "Cash on Delivery";
     const receipt = [
       "LIMPOPO ATCHAR ORDER",
       `Confirmation code: ${code}`,
@@ -166,7 +166,7 @@ export default function Storefront() {
       `Customer: ${order.customer_name}`,
       `Phone: ${order.phone}`,
       `Delivery: ${order.address}, ${order.city}`,
-      "Payment: Cash on Delivery",
+      `Payment: ${paymentLabel}`,
       "",
       "Items Ordered:",
       ...cart.map((item) => `- ${item.quantity}x ${item.name} (${item.size}) - R${item.price * item.quantity}`),
@@ -201,6 +201,91 @@ export default function Storefront() {
       }
     }
     if (!whatsappWindow) setNotice("Order confirmed. Please open WhatsApp and send receipt manually.");
+  }
+
+  async function submitOrder(event) {
+    event.preventDefault();
+    if (busy || !cart.length) return;
+    setBusy(true);
+
+    const form = new FormData(event.currentTarget);
+    const customerName = String(form.get("name"));
+    const phone = String(form.get("phone"));
+    const city = String(form.get("city"));
+    const address = String(form.get("address"));
+    const notes = String(form.get("notes") || "");
+    const email = String(form.get("email") || `${phone.replace(/\s/g, "")}@limpopoatchar.co.za`);
+
+    if (paymentMethod === "cod") {
+      await finaliseOrder({ customerName, phone, city, address, notes, method: "cod" });
+      return;
+    }
+
+    // --- Paystack card payment ---
+    try {
+      const initRes = await fetch("/api/paystack/initialize", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email,
+          amount: total + deliveryFee,
+          metadata: {
+            customer_name: customerName,
+            phone,
+            city,
+            address,
+            notes,
+            cart_summary: cart.map((i) => `${i.quantity}x ${i.name} ${i.size}`).join(", "),
+          },
+        }),
+      });
+
+      const initData = await initRes.json();
+      if (!initRes.ok || !initData.access_code) {
+        setNotice(initData.error || "Could not initialise payment. Please try again.");
+        setBusy(false);
+        return;
+      }
+
+      // Load Paystack inline script and open popup
+      const PaystackPop = await loadPaystackScript();
+      const handler = PaystackPop.setup({
+        key: process.env.NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY,
+        email,
+        amount: (total + deliveryFee) * 100,
+        currency: "ZAR",
+        ref: initData.reference,
+        onClose() {
+          setNotice("Payment cancelled. You can try again.");
+          setBusy(false);
+        },
+        callback(response) {
+          if (response.status === "success") {
+            finaliseOrder({ customerName, phone, city, address, notes, method: "card", paystackRef: response.reference })
+              .catch(() => setNotice("Order save failed. Contact us with ref: " + response.reference));
+          } else {
+            setNotice("Payment was not completed. Please try again.");
+            setBusy(false);
+          }
+        },
+      });
+      handler.openIframe();
+    } catch (err) {
+      console.error("Paystack error:", err);
+      setNotice("Payment error. Please try again or choose Cash on Delivery.");
+      setBusy(false);
+    }
+  }
+
+  function loadPaystackScript() {
+    return new Promise((resolve, reject) => {
+      if (window.PaystackPop) return resolve(window.PaystackPop);
+      const script = document.createElement("script");
+      script.src = "https://js.paystack.co/v1/inline.js";
+      script.onload = () => resolve(window.PaystackPop);
+      script.onerror = () => reject(new Error("Failed to load Paystack script"));
+      document.head.appendChild(script);
+    });
   }
 
   return (
@@ -401,14 +486,59 @@ export default function Storefront() {
           <form className="dialog" onSubmit={submitOrder}>
             <button type="button" className="close" onClick={() => setCheckoutOpen(false)}>×</button>
             <h2>Checkout</h2>
+
             <input name="name" required placeholder="Full name" />
             <input name="phone" required placeholder="Phone number" />
+            <input name="email" type="email" placeholder="Email (for card payment receipt)" />
             <input name="city" required placeholder="Town / City" />
             <textarea name="address" required placeholder="Delivery address" />
             <textarea name="notes" placeholder="Order notes (optional)" />
-            <p className="payment">Cash on Delivery · Delivery fee: R{deliveryFee}</p>
+
+            {/* Payment method selector */}
+            <div className="payment-method-group">
+              <p className="payment-method-label">Choose payment method:</p>
+              <div className="payment-method-options">
+                <label className={`pay-option ${paymentMethod === "cod" ? "active" : ""}`}>
+                  <input
+                    type="radio"
+                    name="payment_method"
+                    value="cod"
+                    checked={paymentMethod === "cod"}
+                    onChange={() => setPaymentMethod("cod")}
+                  />
+                  <span className="pay-icon">💵</span>
+                  <span>
+                    <strong>Cash on Delivery</strong>
+                    <small>Pay when your order arrives</small>
+                  </span>
+                </label>
+
+                <label className={`pay-option ${paymentMethod === "card" ? "active" : ""}`}>
+                  <input
+                    type="radio"
+                    name="payment_method"
+                    value="card"
+                    checked={paymentMethod === "card"}
+                    onChange={() => setPaymentMethod("card")}
+                  />
+                  <span className="pay-icon">💳</span>
+                  <span>
+                    <strong>Pay by Card</strong>
+                    <small>Visa, Mastercard, EFT — Secure via Paystack</small>
+                  </span>
+                </label>
+              </div>
+            </div>
+
+            <p className="payment">Delivery fee: R{deliveryFee} · Total: <strong>R{total + deliveryFee}</strong></p>
+
             <button className="primary full" disabled={busy}>
-              {busy ? "Placing order..." : `Place Order (R${total + deliveryFee})`}
+              {busy
+                ? paymentMethod === "card" ? "Opening payment..." : "Placing order..."
+                : paymentMethod === "card"
+                  ? `💳 Pay R${total + deliveryFee} by Card`
+                  : `✅ Place Order (R${total + deliveryFee}) — COD`
+              }
             </button>
           </form>
         </div>
@@ -424,7 +554,7 @@ export default function Storefront() {
               <p><b>Order:</b> {success.order.order_number}</p>
               <p><b>Customer:</b> {success.order.customer_name}</p>
               <p><b>Delivery:</b> {success.order.address}, {success.order.city}</p>
-              <p><b>Payment:</b> Cash on Delivery</p>
+              <p><b>Payment:</b> {success.order.payment_method === "card" ? `💳 Card Payment — Paid (Ref: ${success.order.paystack_reference || "N/A"})` : "💵 Cash on Delivery"}</p>
               {success.order.items.map((item, index) => (
                 <p key={`${item.size}-${index}`}>
                   <b>{item.quantity}x {item.category || item.name} ({item.size})</b> — R{item.price * item.quantity}

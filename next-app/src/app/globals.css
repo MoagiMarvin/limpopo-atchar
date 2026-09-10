@@ -317,3 +317,20 @@ footer a{color:#fff;text-decoration:none}
   footer>*{display:block;margin-bottom:15px}
   .drawer{width:100%}
 }
+
+/* ── Payment method selector ── */
+.payment-method-group{margin:16px 0 10px}
+.payment-method-label{font-size:13px;font-weight:700;color:var(--muted);margin:0 0 10px;text-transform:uppercase;letter-spacing:.6px}
+.payment-method-options{display:flex;flex-direction:column;gap:10px}
+.pay-option{
+  display:flex;align-items:center;gap:14px;
+  padding:14px 16px;border:1.5px solid var(--border);border-radius:10px;
+  cursor:pointer;transition:all .18s ease;background:#fafaf8;
+}
+.pay-option:hover{border-color:var(--green2);background:var(--cream)}
+.pay-option.active{border-color:var(--green2);background:#edf5e8;box-shadow:0 0 0 2px rgba(45,99,19,.13)}
+.pay-option input[type=radio]{width:16px;height:16px;accent-color:var(--green2);flex-shrink:0}
+.pay-icon{font-size:22px;flex-shrink:0}
+.pay-option span:last-child{display:flex;flex-direction:column;gap:2px}
+.pay-option strong{font-size:14px;font-weight:700;color:var(--text)}
+.pay-option small{font-size:11px;color:var(--muted);font-weight:500}
