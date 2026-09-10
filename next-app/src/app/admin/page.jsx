@@ -69,9 +69,9 @@ export default function AdminPage() {
     let dbProducts = [];
     let dbOrders = [];
 
-    // Fetch products & orders via server API and client
+    // Fetch products & orders strictly from Supabase database via server API
     try {
-      const ordersRes = await fetch("/api/orders/list");
+      const ordersRes = await fetch("/api/orders/list", { cache: "no-store" });
       if (ordersRes.ok) {
         const json = await ordersRes.json();
         if (json.orders) dbOrders = json.orders;
@@ -108,34 +108,10 @@ export default function AdminPage() {
       }
     }
 
-    // Merge with LocalStorage orders so offline/local receipts also load in Admin
-    let localOrders = [];
-    if (typeof window !== "undefined") {
-      try {
-        const listStr = window.localStorage.getItem("lp_orders");
-        if (listStr) localOrders = JSON.parse(listStr);
-        const lastRecStr = window.localStorage.getItem("lp_last_receipt");
-        if (lastRecStr) {
-          const lastRec = JSON.parse(lastRecStr);
-          if (lastRec && !localOrders.some((o) => o.id === lastRec.id || o.order_number === lastRec.order_number)) {
-            localOrders.unshift(lastRec);
-          }
-        }
-      } catch { /* storage fallback */ }
-    }
-
-    // Deduplicate orders by id / order_number
-    const map = new Map();
-    [...dbOrders, ...localOrders].forEach((o) => {
-      if (!o) return;
-      const key = o.id || o.order_number;
-      if (!map.has(key)) map.set(key, o);
-    });
-
-    const combinedOrders = Array.from(map.values());
     if (dbProducts.length) setProducts(dbProducts);
-    setOrders(combinedOrders);
+    setOrders(dbOrders);
   }
+
 
   async function signInWithSupabase(event) {
     event.preventDefault();
