@@ -200,22 +200,38 @@ export default function Storefront() {
       `Total: R${order.total}`
     ].join("\n");
 
-    const whatsappWindow = window.open(`https://wa.me/27637326719?text=${encodeURIComponent(receipt)}`, "_blank");
-    window.localStorage.setItem("lp_last_receipt", JSON.stringify(order));
-    try {
-      const existingOrders = JSON.parse(window.localStorage.getItem("lp_orders") || "[]");
-      const updatedOrders = [order, ...existingOrders.filter((o) => o.id !== order.id)];
-      window.localStorage.setItem("lp_orders", JSON.stringify(updatedOrders.slice(0, 50)));
-    } catch { /* storage fallback */ }
-    setCart([]);
-    setCartOpen(false);
-    setCheckoutOpen(false);
-    setSuccess({ code, order });
-    setBusy(false);
+    let savedToDb = false;
+    let dbErrorMsg = null;
+    let finalOrder = order;
 
-    // Direct Supabase insert (restored exactly as before)
-    if (supabase) {
+    try {
+      console.log("[Checkout] Saving order to database via API...");
+      const apiRes = await fetch("/api/orders/create", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(order),
+      });
+
+      const apiData = await apiRes.json().catch(() => ({}));
+
+      if (apiRes.ok && apiData?.savedToDb) {
+        savedToDb = true;
+        if (apiData.order) {
+          finalOrder = { ...apiData.order, items: order.items };
+        }
+        console.log("[Checkout] Order saved to Supabase DB successfully:", finalOrder.order_number);
+      } else {
+        dbErrorMsg = apiData?.error || apiData?.message || `Server responded with ${apiRes.status}`;
+        console.error("[Checkout] API save failed:", apiRes.status, dbErrorMsg);
+      }
+    } catch (e) {
+      dbErrorMsg = e?.message || "Network error connecting to database";
+      console.error("[Checkout] API fetch crashed:", e);
+    }
+
+    if (!savedToDb && supabase) {
       try {
+        console.log("[Checkout] API failed - trying direct Supabase insert as backup...");
         const dbOrderPayload = {
           id: order.id,
           order_number: order.order_number,
@@ -230,40 +246,65 @@ export default function Storefront() {
           payment_status: order.payment_status,
           paystack_reference: order.paystack_reference,
           delivery_fee: order.delivery_fee,
+          status: "New",
         };
-        const saved = await supabase.from("orders").insert(dbOrderPayload);
+        const saved = await supabase.from("orders").insert(dbOrderPayload).select().single();
         if (saved.error) {
-          console.warn("Direct orders insert attempt 1 error:", saved.error.message);
-          // Try with items array if schema expects items column
-          await supabase.from("orders").insert(order);
-        }
+          console.error("[Checkout] Direct Supabase insert error:", saved.error.message);
+          dbErrorMsg = saved.error.message;
+        } else {
+          savedToDb = true;
+          if (saved.data) finalOrder = { ...saved.data, items: order.items };
+          console.log("[Checkout] Direct Supabase insert succeeded.");
 
-        const itemsPayload = cart.map((item) => ({
-          order_id: order.id,
-          product_id: item.id && !String(item.id).startsWith("temp") ? item.id : null,
-          product_name: item.name,
-          size: item.size,
-          price: item.price,
-          quantity: item.quantity
-        }));
-        await supabase.from("order_items").insert(itemsPayload);
+          const itemsPayload = cart.map((item) => ({
+            order_id: order.id,
+            product_id: item.id && !String(item.id).startsWith("temp") ? item.id : null,
+            product_name: item.name,
+            size: item.size,
+            price: item.price,
+            quantity: item.quantity
+          }));
+          const itemsRes = await supabase.from("order_items").insert(itemsPayload);
+          if (itemsRes.error) {
+            console.warn("[Checkout] order_items insert warning:", itemsRes.error.message);
+          }
+        }
       } catch (err) {
-        console.warn("Direct Supabase insert notice:", err);
+        dbErrorMsg = err?.message || dbErrorMsg || "Unknown database error";
+        console.error("[Checkout] Direct Supabase insert crashed:", err);
       }
     }
 
-    // Sync order with backend database API as secondary layer
     try {
-      await fetch("/api/orders/create", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(order),
-      });
-    } catch (e) {
-      console.warn("API order sync notice:", e);
-    }
+      window.localStorage.setItem("lp_last_receipt", JSON.stringify(finalOrder));
+    } catch { /* ignore */ }
 
-    if (!whatsappWindow) setNotice("Order confirmed! Please click Download Receipt below or send on WhatsApp.");
+    try {
+      const existingOrders = JSON.parse(window.localStorage.getItem("lp_orders") || "[]");
+      const updatedOrders = [finalOrder, ...existingOrders.filter((o) => o.id !== finalOrder.id)];
+      window.localStorage.setItem("lp_orders", JSON.stringify(updatedOrders.slice(0, 50)));
+    } catch { /* ignore */ }
+
+    setCart([]);
+    setCartOpen(false);
+    setCheckoutOpen(false);
+    setSuccess({ code: finalOrder.confirmation_code || code, order: finalOrder });
+    setBusy(false);
+
+    const whatsappWindow = window.open(`https://wa.me/27637326719?text=${encodeURIComponent(receipt)}`, "_blank");
+
+    if (!savedToDb) {
+      const userMsg = dbErrorMsg
+        ? `Order recorded but couldn't save to database. Please contact us. (${dbErrorMsg})`
+        : "Order recorded but couldn't reach database. Please contact us to confirm.";
+      setNotice(userMsg);
+      console.warn("[Checkout] Order was NOT saved to Supabase - only in local fallback.");
+    } else {
+      if (!whatsappWindow) {
+        setNotice("Order confirmed! Saved to database. Click Download Receipt below or send on WhatsApp.");
+      }
+    }
   }
 
   async function submitOrder(event) {

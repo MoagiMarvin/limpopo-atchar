@@ -69,15 +69,19 @@ export default function AdminPage() {
     let dbProducts = [];
     let dbOrders = [];
 
-    // Fetch products & orders strictly from Supabase database via server API
     try {
       const ordersRes = await fetch("/api/orders/list", { cache: "no-store" });
       if (ordersRes.ok) {
         const json = await ordersRes.json();
-        if (json.orders) dbOrders = json.orders;
+        if (json.orders && json.orders.length) {
+          dbOrders = json.orders;
+          console.log("[Admin] Loaded", dbOrders.length, "orders from /api/orders/list");
+        }
+      } else {
+        console.warn("[Admin] /api/orders/list responded with", ordersRes.status);
       }
     } catch (e) {
-      console.warn("API orders fetch notice:", e);
+      console.warn("[Admin] API orders fetch error:", e);
     }
 
     if (supabase) {
@@ -86,11 +90,27 @@ export default function AdminPage() {
         if (productData?.length) dbProducts = productData;
 
         if (!dbOrders.length) {
-          const { data: orderData } = await supabase.from("orders").select("*, order_items(*)").order("created_at", { ascending: false });
-          if (orderData) {
+          console.log("[Admin] API returned no orders - trying direct Supabase select...");
+          const { data: orderData, error: orderErr } = await supabase
+            .from("orders")
+            .select("*, order_items(*)")
+            .order("created_at", { ascending: false });
+
+          if (orderErr) {
+            console.error("[Admin] Direct Supabase orders select error:", orderErr.message);
+            const { data: simpleOrders, error: simpleErr } = await supabase
+              .from("orders")
+              .select("*")
+              .order("created_at", { ascending: false });
+            if (simpleErr) {
+              console.error("[Admin] Simple orders select also failed:", simpleErr.message);
+            } else if (simpleOrders) {
+              dbOrders = simpleOrders.map((o) => ({ ...o, items: [] }));
+            }
+          } else if (orderData) {
             dbOrders = orderData.map((o) => {
-              const items = (Array.isArray(o.items) && o.items.length) 
-                ? o.items 
+              const items = (Array.isArray(o.items) && o.items.length)
+                ? o.items
                 : (Array.isArray(o.order_items) && o.order_items.length)
                   ? o.order_items.map((i) => ({
                       name: i.product_name || i.name,
@@ -101,11 +121,26 @@ export default function AdminPage() {
                   : [];
               return { ...o, items };
             });
+            console.log("[Admin] Direct Supabase loaded", dbOrders.length, "orders.");
           }
         }
       } catch (e) {
-        console.warn("Supabase fetch notice:", e);
+        console.warn("[Admin] Supabase fetch crash:", e);
       }
+    }
+
+    if (!dbOrders.length && typeof window !== "undefined") {
+      try {
+        const local = window.localStorage.getItem("lp_orders");
+        if (local) {
+          const parsed = JSON.parse(local);
+          if (Array.isArray(parsed) && parsed.length) {
+            console.warn("[Admin] WARNING: Showing", parsed.length, "orders from localStorage only! Supabase returned nothing.");
+            dbOrders = parsed;
+            setNotice("WARNING: These orders are from browser storage. The Supabase database returned empty.");
+          }
+        }
+      } catch { /* ignore */ }
     }
 
     if (dbProducts.length) setProducts(dbProducts);
@@ -260,14 +295,35 @@ export default function AdminPage() {
   }
 
   async function updateOrder(id, field, value) {
-    // Update state & local storage
+    const prevOrders = orders;
     const updated = orders.map((o) => (o.id === id ? { ...o, [field]: value } : o));
     setOrders(updated);
     if (typeof window !== "undefined") {
       try { window.localStorage.setItem("lp_orders", JSON.stringify(updated)); } catch {}
     }
-    if (supabase) {
-      await supabase.from("orders").update({ [field]: value }).eq("id", id);
+
+    if (!supabase) {
+      setNotice("Warning: Supabase not connected. Changes saved locally only.");
+      return;
+    }
+
+    try {
+      const { error } = await supabase
+        .from("orders")
+        .update({ [field]: value })
+        .eq("id", id);
+
+      if (error) {
+        console.error("[Admin] Update order error:", error.message);
+        setOrders(prevOrders);
+        setNotice("Failed to update order in database: " + error.message);
+      } else {
+        setNotice(`Order ${field} updated.`);
+      }
+    } catch (e) {
+      console.error("[Admin] Update order crash:", e);
+      setOrders(prevOrders);
+      setNotice("Error updating order: " + (e?.message || String(e)));
     }
   }
 
