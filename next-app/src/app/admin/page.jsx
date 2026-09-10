@@ -207,20 +207,22 @@ export default function AdminPage() {
         <Link href="/" className="admin-brand">
           LIMPOPO <small>ATCHAR</small>
         </Link>
-        <button className={view === "orders" ? "selected" : ""} onClick={() => setView("orders")}>
-          Orders <b>{activeOrders}</b>
-        </button>
-        <button className={view === "products" ? "selected" : ""} onClick={() => setView("products")}>
-          Products
-        </button>
-        <button className={view === "settings" ? "selected" : ""} onClick={() => setView("settings")}>
-          Settings
-        </button>
-        {supabase && (
-          <button className="admin-signout" onClick={() => supabase.auth.signOut()}>
-            Sign out
+        <div className="admin-sidebar-nav">
+          <button className={view === "orders" ? "selected" : ""} onClick={() => setView("orders")}>
+            Orders <b>{activeOrders}</b>
           </button>
-        )}
+          <button className={view === "products" ? "selected" : ""} onClick={() => setView("products")}>
+            Products
+          </button>
+          <button className={view === "settings" ? "selected" : ""} onClick={() => setView("settings")}>
+            Settings
+          </button>
+          {supabase && (
+            <button className="admin-signout" onClick={() => supabase.auth.signOut()}>
+              Sign out
+            </button>
+          )}
+        </div>
       </aside>
 
       <section className="admin-content">
