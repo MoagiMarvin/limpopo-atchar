@@ -26,6 +26,7 @@ const orderTabs = [
   { key: "all", label: "All Orders" },
 ];
 const dateRanges = [
+  { key: "today", label: "Today" },
   { key: "yesterday", label: "Yesterday" },
   { key: "2d", label: "Past 2 Days" },
   { key: "3d", label: "Past 3 Days" },
@@ -221,10 +222,14 @@ export default function AdminPage() {
     const orderDay = new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
     const daysDiff = Math.floor((startOfToday - orderDay) / (1000 * 60 * 60 * 24));
 
+    if (rangeKey === "today") {
+      return daysDiff === 0; // orders placed TODAY (from midnight onwards)
+    }
     if (rangeKey === "yesterday") {
       return daysDiff === 1;
     }
     if (rangeKey === "2d") {
+      // TODAY + YESTERDAY + DAY BEFORE YESTERDAY = past 2 calendar days (from now going back)
       return daysDiff <= 2;
     }
     if (rangeKey === "3d") {
