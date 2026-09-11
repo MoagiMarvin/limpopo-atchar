@@ -457,7 +457,6 @@ export default function Storefront() {
           <div className="products">
             {visibleProducts.map((product) => {
               const prodKey = product.id || `${product.name}-${product.size}`;
-              const qty = getCardQty(prodKey);
               return (
                 <article className="product" key={prodKey}>
                   <span className="product-tag">{product.badge}</span>
@@ -469,44 +468,13 @@ export default function Storefront() {
                     <p className="size-label">Container size: <b>{product.size}</b></p>
                     <div className="price">R{product.price}</div>
 
-                    {/* Quantity Selector on Product Card */}
-                    <div className="card-qty-row">
-                      <label style={{ fontSize: "11px", fontWeight: "bold", color: "var(--muted)" }}>QTY:</label>
-                      <div className="qty-controls">
-                        <button
-                          type="button"
-                          className="qty-btn"
-                          onClick={() => setCardQty(prodKey, qty - 1)}
-                          disabled={qty <= 1}
-                        >
-                          -
-                        </button>
-                        <input
-                          className="qty-input"
-                          type="number"
-                          min="1"
-                          max={product.stock}
-                          value={qty}
-                          onChange={(e) => setCardQty(prodKey, e.target.value)}
-                        />
-                        <button
-                          type="button"
-                          className="qty-btn"
-                          onClick={() => setCardQty(prodKey, qty + 1)}
-                          disabled={qty >= product.stock}
-                        >
-                          +
-                        </button>
-                      </div>
-                    </div>
-
                     <button
                       className="add"
-                      onClick={() => addToCart(product, qty)}
+                      onClick={() => addToCart(product, 1)}
                       disabled={product.stock <= 0}
                       style={{ marginTop: "10px" }}
                     >
-                      {product.stock <= 0 ? "Out of stock" : `🛒 Add ${qty > 1 ? `${qty}x ` : ""}${product.size} to Cart`}
+                      {product.stock <= 0 ? "Out of stock" : `🛒 Add ${product.size} to Cart`}
                     </button>
                   </div>
                 </article>
