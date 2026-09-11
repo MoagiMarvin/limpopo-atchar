@@ -19,6 +19,19 @@ const fallbackProducts = [
 ];
 
 const statuses = ["New", "Confirmed", "Preparing", "Out for delivery", "Delivered", "Cancelled"];
+const orderTabs = [
+  { key: "active", label: "Active" },
+  { key: "delivered", label: "Delivered" },
+  { key: "cancelled", label: "Cancelled" },
+  { key: "all", label: "All Orders" },
+];
+const dateRanges = [
+  { key: "all", label: "All Time" },
+  { key: "today", label: "Today" },
+  { key: "7d", label: "Last 7 Days" },
+  { key: "30d", label: "Last 30 Days" },
+  { key: "month", label: "This Month" },
+];
 
 function getBaseFlavourName(p) {
   if (p.category && p.category.trim()) return p.category.trim();
@@ -40,6 +53,9 @@ export default function AdminPage() {
   const [busy, setBusy] = useState(false);
   const [activeReceiptOrder, setActiveReceiptOrder] = useState(null);
   const [loginMode, setLoginMode] = useState("supabase"); // 'supabase' | 'pin'
+  const [orderTab, setOrderTab] = useState("active");
+  const [dateRange, setDateRange] = useState("all");
+  const [expandedOrders, setExpandedOrders] = useState({});
 
   useEffect(() => {
     // Read saved admin password & authed state
@@ -428,6 +444,62 @@ export default function AdminPage() {
   const activeOrders = orders.filter((order) => !["Delivered", "Cancelled"].includes(order.status)).length;
   const paidOrders = orders.filter((order) => order.payment_status === "Paid").length;
 
+  function dateFilterFn(rangeKey, order) {
+    const d = order.created_at ? new Date(order.created_at) : new Date();
+    const now = new Date();
+    if (rangeKey === "today") {
+      return d.toDateString() === now.toDateString();
+    }
+    if (rangeKey === "7d") {
+      return (now - d) / (1000 * 60 * 60 * 24) <= 7;
+    }
+    if (rangeKey === "30d") {
+      return (now - d) / (1000 * 60 * 60 * 24) <= 30;
+    }
+    if (rangeKey === "month") {
+      return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
+    }
+    return true;
+  }
+
+  const filteredByDate = useMemo(() => orders.filter((o) => dateFilterFn(dateRange, o)), [orders, dateRange]);
+
+  const metrics = useMemo(() => {
+    const list = filteredByDate;
+    const totalRevenue = list.reduce((sum, o) => sum + (Number(o.total) || 0), 0);
+    const cardRevenue = list.filter((o) => o.payment_method === "card").reduce((sum, o) => sum + (Number(o.total) || 0), 0);
+    const codRevenue = list.filter((o) => o.payment_method === "cod").reduce((sum, o) => sum + (Number(o.total) || 0), 0);
+    const deliveredCount = list.filter((o) => o.status === "Delivered").length;
+    const cancelledCount = list.filter((o) => o.status === "Cancelled").length;
+    const activeCount = list.filter((o) => !["Delivered", "Cancelled"].includes(o.status)).length;
+    return { totalRevenue, cardRevenue, codRevenue, deliveredCount, cancelledCount, activeCount, count: list.length };
+  }, [filteredByDate]);
+
+  const displayedOrders = useMemo(() => {
+    return filteredByDate.filter((o) => {
+      if (orderTab === "active") return !["Delivered", "Cancelled"].includes(o.status);
+      if (orderTab === "delivered") return o.status === "Delivered";
+      if (orderTab === "cancelled") return o.status === "Cancelled";
+      return true;
+    });
+  }, [filteredByDate, orderTab]);
+
+  function toggleExpand(orderId) {
+    setExpandedOrders((prev) => ({ ...prev, [orderId]: !prev[orderId] }));
+  }
+
+  function statusColor(status) {
+    switch (status) {
+      case "Delivered": return "#2e7d32";
+      case "Cancelled": return "#c62828";
+      case "Out for delivery": return "#ef6c00";
+      case "Preparing": return "#6a1b9a";
+      case "Confirmed": return "#1565c0";
+      case "New": return "#00695c";
+      default: return "#555";
+    }
+  }
+
   return (
     <main className="admin-shell">
       <aside className="admin-sidebar">
@@ -467,125 +539,247 @@ export default function AdminPage() {
 
         {view === "orders" && (
           <>
-            <div className="admin-metrics">
+            <div className="admin-metrics" style={{ gridTemplateColumns: "repeat(7, 1fr)" }}>
               <div>
-                <b>{orders.length}</b>
-                <span>Total orders</span>
+                <b>{metrics.count}</b>
+                <span>Orders ({dateRanges.find((d) => d.key === dateRange)?.label})</span>
               </div>
               <div>
-                <b>{activeOrders}</b>
-                <span>Active orders</span>
+                <b>{metrics.activeCount}</b>
+                <span>Active</span>
               </div>
               <div>
-                <b>{paidOrders}</b>
-                <span>Paid orders</span>
+                <b>{metrics.deliveredCount}</b>
+                <span>Delivered</span>
+              </div>
+              <div>
+                <b>{metrics.cancelledCount}</b>
+                <span>Cancelled</span>
+              </div>
+              <div>
+                <b>R{metrics.totalRevenue.toFixed(0)}</b>
+                <span>Total Revenue</span>
+              </div>
+              <div>
+                <b>R{metrics.cardRevenue.toFixed(0)}</b>
+                <span>💳 Card Revenue</span>
+              </div>
+              <div>
+                <b>R{metrics.codRevenue.toFixed(0)}</b>
+                <span>💵 COD Revenue</span>
               </div>
             </div>
+
             <div className="admin-panel">
-              <div className="panel-heading">
-                <h2>Order fulfilment & Receipts</h2>
-                <button onClick={loadDashboard}>Refresh Orders</button>
+              <div className="panel-heading" style={{ flexWrap: "wrap", gap: "10px" }}>
+                <div>
+                  <h2>Order fulfilment & Receipts</h2>
+                </div>
+                <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+                  <select
+                    value={dateRange}
+                    onChange={(e) => setDateRange(e.target.value)}
+                    style={{ padding: "7px 10px", borderRadius: "6px", border: "1px solid var(--border)", fontSize: "13px" }}
+                  >
+                    {dateRanges.map((r) => (
+                      <option key={r.key} value={r.key}>{r.label}</option>
+                    ))}
+                  </select>
+                  <button onClick={loadDashboard}>Refresh Orders</button>
+                </div>
               </div>
-              {orders.length ? (
-                orders.map((order) => (
-                  <article className="admin-order-card" key={order.id || order.order_number}>
-                    <div className="order-heading">
-                      <div>
-                        <strong>{order.order_number}</strong>
-                        <span>
-                          {order.confirmation_code} · {new Date(order.created_at || Date.now()).toLocaleString()}
-                        </span>
-                      </div>
-                      <b>R{order.total}</b>
-                    </div>
 
-                    {/* Ordered Items Breakdown inside Admin */}
-                    <div style={{ margin: "12px 0", background: "#fbfaf7", padding: "12px 14px", borderRadius: "8px", border: "1px solid var(--border)" }}>
-                      <strong style={{ fontSize: "11px", color: "var(--muted)", textTransform: "uppercase", letterSpacing: "0.5px" }}>Items Purchased:</strong>
-                      {Array.isArray(order.items) && order.items.length ? (
-                        order.items.map((item, idx) => (
-                          <div key={idx} style={{ display: "flex", justifyContent: "space-between", fontSize: "14px", marginTop: "6px" }}>
-                            <span><b>{item.quantity}x</b> {item.name || item.product_name} (<b>{item.size}</b>)</span>
-                            <b>R{item.price * item.quantity}</b>
+              <div style={{ display: "flex", gap: "6px", marginBottom: "18px", borderBottom: "1px solid var(--border)", paddingBottom: "12px", flexWrap: "wrap" }}>
+                {orderTabs.map((tab) => {
+                  const count =
+                    tab.key === "active" ? metrics.activeCount :
+                    tab.key === "delivered" ? metrics.deliveredCount :
+                    tab.key === "cancelled" ? metrics.cancelledCount :
+                    metrics.count;
+                  return (
+                    <button
+                      key={tab.key}
+                      onClick={() => setOrderTab(tab.key)}
+                      style={{
+                        padding: "8px 14px",
+                        borderRadius: "6px",
+                        border: orderTab === tab.key ? "2px solid var(--green)" : "1px solid var(--border)",
+                        background: orderTab === tab.key ? "var(--green)" : "transparent",
+                        color: orderTab === tab.key ? "#fff" : "inherit",
+                        fontWeight: "600",
+                        fontSize: "13px",
+                        cursor: "pointer",
+                      }}
+                    >
+                      {tab.label} <span style={{ opacity: 0.8 }}>({count})</span>
+                    </button>
+                  );
+                })}
+              </div>
+
+              {displayedOrders.length ? (
+                displayedOrders.map((order) => {
+                  const isExpanded = expandedOrders[order.id || order.order_number];
+                  return (
+                    <article
+                      className="admin-order-card"
+                      key={order.id || order.order_number}
+                      style={{ padding: isExpanded ? "14px 0" : "10px 0" }}
+                    >
+                      <div
+                        className="order-summary-row"
+                        onClick={() => toggleExpand(order.id || order.order_number)}
+                        style={{
+                          display: "grid",
+                          gridTemplateColumns: "130px 140px 1fr 100px 110px 90px 40px",
+                          gap: "12px",
+                          alignItems: "center",
+                          cursor: "pointer",
+                          padding: "8px 4px",
+                          fontSize: "13px",
+                        }}
+                      >
+                        <div>
+                          <strong style={{ color: "var(--green)", display: "block" }}>{order.order_number}</strong>
+                          <small style={{ color: "var(--muted)", fontSize: "11px" }}>
+                            {new Date(order.created_at || Date.now()).toLocaleDateString()}
+                          </small>
+                        </div>
+                        <div>
+                          <div style={{ fontWeight: "600" }}>{order.customer_name}</div>
+                          <small style={{ color: "var(--muted)", fontSize: "11px" }}>{order.city || ""}</small>
+                        </div>
+                        <div style={{ color: "var(--muted)", fontSize: "12px" }}>
+                          {Array.isArray(order.items) && order.items.length
+                            ? order.items.map((i) => `${i.quantity}x ${i.name || i.product_name} ${i.size}`).join(", ")
+                            : "Atchar Order"}
+                        </div>
+                        <div style={{ textAlign: "center" }}>
+                          {order.payment_method === "cod" ? "💵 COD" : "💳 Card"}
+                        </div>
+                        <div style={{ textAlign: "center" }}>
+                          <span
+                            style={{
+                              display: "inline-block",
+                              padding: "4px 10px",
+                              borderRadius: "12px",
+                              fontSize: "11px",
+                              fontWeight: "700",
+                              color: "#fff",
+                              background: statusColor(order.status || "New"),
+                              whiteSpace: "nowrap",
+                            }}
+                          >
+                            {order.status || "New"}
+                          </span>
+                        </div>
+                        <div style={{ textAlign: "right", fontWeight: "700", color: "var(--green)" }}>
+                          R{Number(order.total).toFixed(0)}
+                        </div>
+                        <div style={{ textAlign: "center", fontSize: "18px", color: "var(--muted)" }}>
+                          {isExpanded ? "▴" : "▸"}
+                        </div>
+                      </div>
+
+                      {isExpanded && (
+                        <div style={{ marginTop: "14px", padding: "14px 10px", background: "#fbfaf7", borderRadius: "8px", border: "1px solid var(--border)" }}>
+                          <div style={{ marginBottom: "14px" }}>
+                            <strong style={{ fontSize: "11px", color: "var(--muted)", textTransform: "uppercase", letterSpacing: "0.5px" }}>Items Purchased:</strong>
+                            {Array.isArray(order.items) && order.items.length ? (
+                              order.items.map((item, idx) => (
+                                <div key={idx} style={{ display: "flex", justifyContent: "space-between", fontSize: "13px", marginTop: "6px" }}>
+                                  <span><b>{item.quantity}x</b> {item.name || item.product_name} (<b>{item.size}</b>) · R{item.price} each</span>
+                                  <b>R{(Number(item.price) * Number(item.quantity)).toFixed(0)}</b>
+                                </div>
+                              ))
+                            ) : (
+                              <p style={{ margin: "4px 0", fontSize: "13px", color: "var(--muted)" }}>Atchar Order — see receipt</p>
+                            )}
+                            <div style={{ display: "flex", justifyContent: "space-between", marginTop: "10px", paddingTop: "6px", borderTop: "1px dashed var(--border)", fontSize: "13px" }}>
+                              <span>Delivery Fee: R{order.delivery_fee || 30}</span>
+                              <strong style={{ color: "var(--green)" }}>Total: R{Number(order.total).toFixed(0)}</strong>
+                            </div>
                           </div>
-                        ))
-                      ) : (
-                        <p style={{ margin: "4px 0", fontSize: "13px", color: "var(--muted)" }}>Atchar Order ({order.items ? "See receipt" : "Standard batch"})</p>
+
+                          <div className="order-grid">
+                            <p>
+                              <label>Customer</label>
+                              {order.customer_name}
+                              <br />
+                              <a href={`tel:${order.phone}`}>{order.phone}</a>
+                              <br />
+                              <small style={{ color: "var(--muted)" }}>Code: {order.confirmation_code}</small>
+                            </p>
+                            <p>
+                              <label>Delivery location</label>
+                              {order.address}
+                              <br />
+                              {order.city}
+                            </p>
+                            <p>
+                              <label>Payment</label>
+                              {order.payment_method === "cod" ? "💵 Cash on Delivery" : `💳 Paystack Card ${order.paystack_reference ? `(Ref: ${order.paystack_reference})` : ""}`}
+                              <br />
+                              <select
+                                value={order.payment_status || (order.payment_method === "card" ? "Paid" : "Pending")}
+                                onChange={(event) => updateOrder(order.id, "payment_status", event.target.value)}
+                              >
+                                <option>Pending</option>
+                                <option>Paid</option>
+                                <option>Failed</option>
+                              </select>
+                            </p>
+                            <p>
+                              <label>Fulfilment</label>
+                              <select
+                                value={order.status || "New"}
+                                onChange={(event) => updateOrder(order.id, "status", event.target.value)}
+                              >
+                                {statuses.map((status) => (
+                                  <option key={status}>{status}</option>
+                                ))}
+                              </select>
+                              <input
+                                placeholder="Delivery estimate"
+                                value={order.delivery_eta || ""}
+                                onChange={(event) => updateOrder(order.id, "delivery_eta", event.target.value)}
+                              />
+                            </p>
+                          </div>
+
+                          {order.notes && (
+                            <p className="order-notes" style={{ marginTop: "10px" }}>📝 {order.notes}</p>
+                          )}
+
+                          <div style={{ display: "flex", gap: "10px", marginTop: "14px" }}>
+                            <button
+                              className="btn-sm-outline"
+                              style={{ padding: "8px 14px", fontSize: "13px", fontWeight: "600" }}
+                              onClick={(e) => { e.stopPropagation(); setActiveReceiptOrder(order); }}
+                            >
+                              📄 View Full Receipt
+                            </button>
+                            <a
+                              className="contact-customer"
+                              style={{ flex: 1, margin: 0, textAlign: "center", textDecoration: "none" }}
+                              href={`https://wa.me/${String(order.phone).replace(/\D/g, "").replace(/^0/, "27")}`}
+                              target="_blank"
+                              rel="noreferrer"
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              💬 WhatsApp Customer
+                            </a>
+                          </div>
+                        </div>
                       )}
-                      <div style={{ display: "flex", justifyContent: "space-between", marginTop: "10px", paddingTop: "6px", borderTop: "1px dashed var(--border)", fontSize: "13px" }}>
-                        <span>Delivery Fee: R{order.delivery_fee || 30}</span>
-                        <strong style={{ color: "var(--green)" }}>Total: R{order.total}</strong>
-                      </div>
-                    </div>
-
-                    <div className="order-grid">
-                      <p>
-                        <label>Customer</label>
-                        {order.customer_name}
-                        <br />
-                        <a href={`tel:${order.phone}`}>{order.phone}</a>
-                      </p>
-                      <p>
-                        <label>Delivery location</label>
-                        {order.address}
-                        <br />
-                        {order.city}
-                      </p>
-                      <p>
-                        <label>Payment</label>
-                        {order.payment_method === "cod" ? "💵 Cash on Delivery" : `💳 Paystack Card ${order.paystack_reference ? `(Ref: ${order.paystack_reference})` : ""}`}
-                        <br />
-                        <select
-                          value={order.payment_status || (order.payment_method === "card" ? "Paid" : "Pending")}
-                          onChange={(event) => updateOrder(order.id, "payment_status", event.target.value)}
-                        >
-                          <option>Pending</option>
-                          <option>Paid</option>
-                          <option>Failed</option>
-                        </select>
-                      </p>
-                      <p>
-                        <label>Fulfilment</label>
-                        <select
-                          value={order.status || "New"}
-                          onChange={(event) => updateOrder(order.id, "status", event.target.value)}
-                        >
-                          {statuses.map((status) => (
-                            <option key={status}>{status}</option>
-                          ))}
-                        </select>
-                        <input
-                          placeholder="Delivery estimate"
-                          value={order.delivery_eta || ""}
-                          onChange={(event) => updateOrder(order.id, "delivery_eta", event.target.value)}
-                        />
-                      </p>
-                    </div>
-
-                    <p className="order-notes">{order.notes || "No customer notes"}</p>
-
-                    <div style={{ display: "flex", gap: "10px", marginTop: "12px" }}>
-                      <button
-                        className="btn-sm-outline"
-                        style={{ padding: "8px 14px", fontSize: "13px", fontWeight: "600" }}
-                        onClick={() => setActiveReceiptOrder(order)}
-                      >
-                        📄 View Full Receipt
-                      </button>
-                      <a
-                        className="contact-customer"
-                        style={{ flex: 1, margin: 0, textAlign: "center", textDecoration: "none" }}
-                        href={`https://wa.me/${String(order.phone).replace(/\D/g, "").replace(/^0/, "27")}`}
-                        target="_blank"
-                        rel="noreferrer"
-                      >
-                        💬 WhatsApp Customer
-                      </a>
-                    </div>
-                  </article>
-                ))
+                    </article>
+                  );
+                })
               ) : (
-                <p>No orders yet.</p>
+                <p style={{ color: "var(--muted)", padding: "10px 0" }}>
+                  No {orderTab === "active" ? "active" : orderTab === "delivered" ? "delivered" : orderTab === "cancelled" ? "cancelled" : ""} orders
+                  for {dateRanges.find((d) => d.key === dateRange)?.label} yet.
+                </p>
               )}
             </div>
           </>
