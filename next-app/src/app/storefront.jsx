@@ -600,66 +600,20 @@ export default function Storefront() {
 
       {checkoutOpen && (
         <div className="overlay">
-          <form className="dialog dialog-checkout" onSubmit={submitOrder}>
-            <button type="button" className="close" onClick={() => setCheckoutOpen(false)} aria-label="Close checkout">×</button>
-            <div className="checkout-header">
-              <h2>Checkout</h2>
-              <p className="checkout-sub">Complete your delivery details below</p>
-            </div>
+          <form className="dialog" onSubmit={submitOrder}>
+            <button type="button" className="close" onClick={() => setCheckoutOpen(false)}>×</button>
+            <h2>Checkout</h2>
 
-            {/* Section 1: Contact */}
-            <div className="checkout-section">
-              <h3 className="checkout-section-title">Contact Details</h3>
+            <input name="name" required placeholder="Full name" />
+            <input name="phone" required placeholder="Phone number" />
+            <input name="email" type="email" placeholder="Email (for card payment receipt)" />
+            <input name="city" required placeholder="Town / City" />
+            <textarea name="address" required placeholder="Delivery address" />
+            <textarea name="notes" placeholder="Order notes (optional)" />
 
-              <label className="checkout-field">
-                <span className="checkout-label">Full name <i>*</i></span>
-                <input name="name" required placeholder="e.g. Sarah Maluleke" autoComplete="name" />
-              </label>
-
-              <label className="checkout-field">
-                <span className="checkout-label">Phone number <i>*</i></span>
-                <input name="phone" required type="tel" placeholder="071 234 5678" autoComplete="tel" inputMode="tel" />
-              </label>
-
-              <label className="checkout-field">
-                <span className="checkout-label">Email <small>(optional — for receipts)</small></span>
-                <input name="email" type="email" placeholder="you@example.com" autoComplete="email" />
-              </label>
-            </div>
-
-            {/* Section 2: Delivery */}
-            <div className="checkout-section">
-              <h3 className="checkout-section-title">Delivery Address</h3>
-
-              <label className="checkout-field">
-                <span className="checkout-label">Town / City <i>*</i></span>
-                <input name="city" required placeholder="e.g. Polokwane" autoComplete="address-level2" />
-              </label>
-
-              <label className="checkout-field">
-                <span className="checkout-label">Street address <i>*</i></span>
-                <textarea
-                  name="address"
-                  required
-                  placeholder="House number, street name, suburb, landmark..."
-                  autoComplete="street-address"
-                  rows="3"
-                />
-              </label>
-
-              <label className="checkout-field">
-                <span className="checkout-label">Special notes <small>(optional)</small></span>
-                <textarea
-                  name="notes"
-                  placeholder="Gate code, call on arrival, preferred delivery time etc."
-                  rows="2"
-                />
-              </label>
-            </div>
-
-            {/* Section 3: Payment method */}
-            <div className="checkout-section">
-              <h3 className="checkout-section-title">Payment Method</h3>
+            {/* Payment method selector */}
+            <div className="payment-method-group">
+              <p className="payment-method-label">Choose payment method:</p>
               <div className="payment-method-options">
                 <label className={`pay-option ${paymentMethod === "cod" ? "active" : ""}`}>
                   <input
@@ -670,9 +624,9 @@ export default function Storefront() {
                     onChange={() => setPaymentMethod("cod")}
                   />
                   <span className="pay-icon">💵</span>
-                  <span className="pay-copy">
+                  <span>
                     <strong>Cash on Delivery</strong>
-                    <small>Pay with cash when your atchar arrives</small>
+                    <small>Pay when your order arrives</small>
                   </span>
                 </label>
 
@@ -685,47 +639,24 @@ export default function Storefront() {
                     onChange={() => setPaymentMethod("card")}
                   />
                   <span className="pay-icon">💳</span>
-                  <span className="pay-copy">
-                    <strong>Pay by Card / EFT</strong>
-                    <small>Secure checkout via Paystack — pay now</small>
+                  <span>
+                    <strong>Pay by Card</strong>
+                    <small>Visa, Mastercard, EFT — Secure via Paystack</small>
                   </span>
                 </label>
               </div>
             </div>
 
-            {/* Order Summary */}
-            <div className="order-summary-block">
-              <div className="summary-row summary-row-sub">
-                <span>Subtotal ({totalItemCount} items)</span>
-                <b>R{total}</b>
-              </div>
-              <div className="summary-row summary-row-delivery">
-                <span>Delivery fee</span>
-                <b>R{deliveryFee}</b>
-              </div>
-              <div className="summary-row summary-row-total">
-                <span>Total amount</span>
-                <strong>R{total + deliveryFee}</strong>
-              </div>
-            </div>
+            <p className="payment">Delivery fee: R{deliveryFee} · Total: <strong>R{total + deliveryFee}</strong></p>
 
-            {/* CTA Button */}
-            <div className="checkout-cta-wrap">
-              <button className="primary full checkout-cta" disabled={busy}>
-                {busy
-                  ? (paymentMethod === "card" ? "Opening payment..." : "Placing order...")
-                  : (paymentMethod === "card"
-                      ? <>💳 <span className="cta-main">Pay Securely</span> <span className="cta-price">R{total + deliveryFee}</span></>
-                      : <>✅ <span className="cta-main">Place Order</span> <span className="cta-price">R{total + deliveryFee} · COD</span></>
-                    )
-                }
-              </button>
-              <p className="checkout-hint">
-                {paymentMethod === "card"
-                  ? "You'll be redirected to Paystack to complete secure payment."
-                  : "Confirm to finalise your order — pay when you receive your atchar."}
-              </p>
-            </div>
+            <button className="primary full" disabled={busy}>
+              {busy
+                ? paymentMethod === "card" ? "Opening payment..." : "Placing order..."
+                : paymentMethod === "card"
+                  ? `💳 Pay R${total + deliveryFee} by Card`
+                  : `✅ Place Order (R${total + deliveryFee}) — COD`
+              }
+            </button>
           </form>
         </div>
       )}
