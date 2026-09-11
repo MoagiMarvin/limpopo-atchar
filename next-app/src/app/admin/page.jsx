@@ -26,11 +26,11 @@ const orderTabs = [
   { key: "all", label: "All Orders" },
 ];
 const dateRanges = [
+  { key: "yesterday", label: "Yesterday" },
+  { key: "2d", label: "Past 2 Days" },
+  { key: "3d", label: "Past 3 Days" },
+  { key: "7d", label: "Past 7 Days" },
   { key: "all", label: "All Time" },
-  { key: "today", label: "Today" },
-  { key: "7d", label: "Last 7 Days" },
-  { key: "30d", label: "Last 30 Days" },
-  { key: "month", label: "This Month" },
 ];
 
 function getBaseFlavourName(p) {
@@ -54,7 +54,7 @@ export default function AdminPage() {
   const [activeReceiptOrder, setActiveReceiptOrder] = useState(null);
   const [loginMode, setLoginMode] = useState("supabase"); // 'supabase' | 'pin'
   const [orderTab, setOrderTab] = useState("active");
-  const [dateRange, setDateRange] = useState("all");
+  const [dateRange, setDateRange] = useState("2d");
   const [expandedOrders, setExpandedOrders] = useState({});
 
   useEffect(() => {
@@ -217,19 +217,55 @@ export default function AdminPage() {
   function dateFilterFn(rangeKey, order) {
     const d = order.created_at ? new Date(order.created_at) : new Date();
     const now = new Date();
-    if (rangeKey === "today") {
-      return d.toDateString() === now.toDateString();
+    const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+    const orderDay = new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+    const daysDiff = Math.floor((startOfToday - orderDay) / (1000 * 60 * 60 * 24));
+
+    if (rangeKey === "yesterday") {
+      return daysDiff === 1;
+    }
+    if (rangeKey === "2d") {
+      return daysDiff <= 2;
+    }
+    if (rangeKey === "3d") {
+      return daysDiff <= 3;
     }
     if (rangeKey === "7d") {
-      return (now - d) / (1000 * 60 * 60 * 24) <= 7;
+      return daysDiff <= 7;
     }
-    if (rangeKey === "30d") {
-      return (now - d) / (1000 * 60 * 60 * 24) <= 30;
-    }
-    if (rangeKey === "month") {
-      return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
-    }
-    return true;
+    return true; // all
+  }
+
+  function humanizeOrderAge(order) {
+    const d = order.created_at ? new Date(order.created_at) : new Date();
+    const now = new Date();
+    const diffMs = now - d;
+    const diffH = Math.floor(diffMs / (1000 * 60 * 60));
+    if (diffH < 1) return "Just now";
+    if (diffH < 24) return `${diffH}h ago`;
+    const diffD = Math.floor(diffH / 24);
+    if (diffD === 1) return "Yesterday";
+    if (diffD < 7) return `${diffD}d ago`;
+    return d.toLocaleDateString();
+  }
+
+  function displayStatus(order) {
+    const s = order.status;
+    // If a real non-default status is set, always show it
+    if (s && s !== "New") return s;
+    // If status is "New" or empty → show the order AGE instead (more useful)
+    return humanizeOrderAge(order);
+  }
+
+  function displayStatusColor(order) {
+    const s = order.status;
+    if (s && s !== "New") return statusColor(s);
+    // "New" / fallback: soft warm amber based on age
+    const d = order.created_at ? new Date(order.created_at) : new Date();
+    const ageH = (Date.now() - d.getTime()) / (1000 * 60 * 60);
+    if (ageH < 6) return "#00695c";       // <6h: teal (fresh)
+    if (ageH < 24) return "#ef6c00";      // <24h: orange (attention)
+    return "#795548";                      // >24h: brown (needs action)
   }
 
   function toggleExpand(orderId) {
@@ -543,34 +579,22 @@ export default function AdminPage() {
 
         {view === "orders" && (
           <>
-            <div className="admin-metrics" style={{ gridTemplateColumns: "repeat(7, 1fr)" }}>
+            <div className="admin-metrics" style={{ gridTemplateColumns: "repeat(4, 1fr)" }}>
               <div>
                 <b>{metrics.count}</b>
-                <span>Orders ({dateRanges.find((d) => d.key === dateRange)?.label})</span>
+                <span>Total Orders</span>
               </div>
               <div>
-                <b>{metrics.activeCount}</b>
+                <b style={{ color: "#ef6c00" }}>{metrics.activeCount}</b>
                 <span>Active</span>
               </div>
               <div>
-                <b>{metrics.deliveredCount}</b>
+                <b style={{ color: "#2e7d32" }}>{metrics.deliveredCount}</b>
                 <span>Delivered</span>
               </div>
               <div>
-                <b>{metrics.cancelledCount}</b>
+                <b style={{ color: "#c62828" }}>{metrics.cancelledCount}</b>
                 <span>Cancelled</span>
-              </div>
-              <div>
-                <b>R{metrics.totalRevenue.toFixed(0)}</b>
-                <span>Total Revenue</span>
-              </div>
-              <div>
-                <b>R{metrics.cardRevenue.toFixed(0)}</b>
-                <span>💳 Card Revenue</span>
-              </div>
-              <div>
-                <b>R{metrics.codRevenue.toFixed(0)}</b>
-                <span>💵 COD Revenue</span>
               </div>
             </div>
 
@@ -630,58 +654,68 @@ export default function AdminPage() {
                       key={order.id || order.order_number}
                       style={{ padding: isExpanded ? "14px 0" : "10px 0" }}
                     >
+                      {/* ═══ DESKTOP: Inline 7-column grid ═══ */}
                       <div
-                        className="order-summary-row"
+                        className="order-summary-row order-summary-desktop"
                         onClick={() => toggleExpand(order.id || order.order_number)}
-                        style={{
-                          display: "grid",
-                          gridTemplateColumns: "130px 140px 1fr 100px 110px 90px 40px",
-                          gap: "12px",
-                          alignItems: "center",
-                          cursor: "pointer",
-                          padding: "8px 4px",
-                          fontSize: "13px",
-                        }}
                       >
-                        <div>
-                          <strong style={{ color: "var(--green)", display: "block" }}>{order.order_number}</strong>
-                          <small style={{ color: "var(--muted)", fontSize: "11px" }}>
-                            {new Date(order.created_at || Date.now()).toLocaleDateString()}
-                          </small>
+                        <div className="os-col os-order">
+                          <strong>{order.order_number}</strong>
+                          <small>{new Date(order.created_at || Date.now()).toLocaleDateString()}</small>
                         </div>
-                        <div>
-                          <div style={{ fontWeight: "600" }}>{order.customer_name}</div>
-                          <small style={{ color: "var(--muted)", fontSize: "11px" }}>{order.city || ""}</small>
+                        <div className="os-col os-cust">
+                          <div className="os-cust-name">{order.customer_name}</div>
+                          <small>{order.city || ""}</small>
                         </div>
-                        <div style={{ color: "var(--muted)", fontSize: "12px" }}>
+                        <div className="os-col os-items">
                           {Array.isArray(order.items) && order.items.length
                             ? order.items.map((i) => `${i.quantity}x ${i.name || i.product_name} ${i.size}`).join(", ")
                             : "Atchar Order"}
                         </div>
-                        <div style={{ textAlign: "center" }}>
+                        <div className="os-col os-pay">
                           {order.payment_method === "cod" ? "💵 COD" : "💳 Card"}
                         </div>
-                        <div style={{ textAlign: "center" }}>
-                          <span
-                            style={{
-                              display: "inline-block",
-                              padding: "4px 10px",
-                              borderRadius: "12px",
-                              fontSize: "11px",
-                              fontWeight: "700",
-                              color: "#fff",
-                              background: statusColor(order.status || "New"),
-                              whiteSpace: "nowrap",
-                            }}
-                          >
-                            {order.status || "New"}
+                        <div className="os-col os-status">
+                          <span className="status-badge" style={{ background: displayStatusColor(order) }}>
+                            {displayStatus(order)}
                           </span>
                         </div>
-                        <div style={{ textAlign: "right", fontWeight: "700", color: "var(--green)" }}>
+                        <div className="os-col os-total">
                           R{Number(order.total).toFixed(0)}
                         </div>
-                        <div style={{ textAlign: "center", fontSize: "18px", color: "var(--muted)" }}>
+                        <div className="os-col os-caret">
                           {isExpanded ? "▴" : "▸"}
+                        </div>
+                      </div>
+
+                      {/* ═══ MOBILE: Stacked mini-card ═══ */}
+                      <div
+                        className="order-summary-mobile"
+                        onClick={() => toggleExpand(order.id || order.order_number)}
+                      >
+                        <div className="osm-top">
+                          <div className="osm-top-left">
+                            <strong className="osm-order">{order.order_number}</strong>
+                            <span className="osm-date">{new Date(order.created_at || Date.now()).toLocaleDateString()}</span>
+                          </div>
+                          <div className="osm-top-right">
+                            <span className="status-badge" style={{ background: displayStatusColor(order) }}>
+                              {displayStatus(order)}
+                            </span>
+                            <span className="osm-caret">{isExpanded ? "▴" : "▸"}</span>
+                          </div>
+                        </div>
+                        <div className="osm-customer">
+                          <b>{order.customer_name}</b>
+                          <span className="osm-city"> · {order.city || ""}</span>
+                        </div>
+                        <div className="osm-bottom">
+                          <div className="osm-bottom-left">
+                            <span className="osm-pay">{order.payment_method === "cod" ? "💵 COD" : "💳 Card"}</span>
+                          </div>
+                          <div className="osm-bottom-right">
+                            <b className="osm-total">R{Number(order.total).toFixed(0)}</b>
+                          </div>
                         </div>
                       </div>
 
