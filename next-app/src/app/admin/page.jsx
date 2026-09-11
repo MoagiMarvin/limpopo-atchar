@@ -214,6 +214,44 @@ export default function AdminPage() {
     setNotice("Admin Password updated successfully!");
   }
 
+  function dateFilterFn(rangeKey, order) {
+    const d = order.created_at ? new Date(order.created_at) : new Date();
+    const now = new Date();
+    if (rangeKey === "today") {
+      return d.toDateString() === now.toDateString();
+    }
+    if (rangeKey === "7d") {
+      return (now - d) / (1000 * 60 * 60 * 24) <= 7;
+    }
+    if (rangeKey === "30d") {
+      return (now - d) / (1000 * 60 * 60 * 24) <= 30;
+    }
+    if (rangeKey === "month") {
+      return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
+    }
+    return true;
+  }
+
+  function toggleExpand(orderId) {
+    setExpandedOrders((prev) => ({ ...prev, [orderId]: !prev[orderId] }));
+  }
+
+  function statusColor(status) {
+    switch (status) {
+      case "Delivered": return "#2e7d32";
+      case "Cancelled": return "#c62828";
+      case "Out for delivery": return "#ef6c00";
+      case "Preparing": return "#6a1b9a";
+      case "Confirmed": return "#1565c0";
+      case "New": return "#00695c";
+      default: return "#555";
+    }
+  }
+
+  // ══════════════════════════════════════════════════════
+  // ALL useMemo hooks declared here — BEFORE any conditional return
+  // ══════════════════════════════════════════════════════
+
   // Group products into Flavour Sections
   const groupedFlavours = useMemo(() => {
     const map = {};
@@ -229,6 +267,31 @@ export default function AdminPage() {
     });
     return Object.values(map);
   }, [products]);
+
+  const activeOrders = orders.filter((order) => !["Delivered", "Cancelled"].includes(order.status)).length;
+  const paidOrders = orders.filter((order) => order.payment_status === "Paid").length;
+
+  const filteredByDate = useMemo(() => orders.filter((o) => dateFilterFn(dateRange, o)), [orders, dateRange]);
+
+  const metrics = useMemo(() => {
+    const list = filteredByDate;
+    const totalRevenue = list.reduce((sum, o) => sum + (Number(o.total) || 0), 0);
+    const cardRevenue = list.filter((o) => o.payment_method === "card").reduce((sum, o) => sum + (Number(o.total) || 0), 0);
+    const codRevenue = list.filter((o) => o.payment_method === "cod").reduce((sum, o) => sum + (Number(o.total) || 0), 0);
+    const deliveredCount = list.filter((o) => o.status === "Delivered").length;
+    const cancelledCount = list.filter((o) => o.status === "Cancelled").length;
+    const activeCount = list.filter((o) => !["Delivered", "Cancelled"].includes(o.status)).length;
+    return { totalRevenue, cardRevenue, codRevenue, deliveredCount, cancelledCount, activeCount, count: list.length };
+  }, [filteredByDate]);
+
+  const displayedOrders = useMemo(() => {
+    return filteredByDate.filter((o) => {
+      if (orderTab === "active") return !["Delivered", "Cancelled"].includes(o.status);
+      if (orderTab === "delivered") return o.status === "Delivered";
+      if (orderTab === "cancelled") return o.status === "Cancelled";
+      return true;
+    });
+  }, [filteredByDate, orderTab]);
 
   async function saveProduct(product) {
     setBusy(true);
@@ -439,65 +502,6 @@ export default function AdminPage() {
         )}
       </main>
     );
-  }
-
-  const activeOrders = orders.filter((order) => !["Delivered", "Cancelled"].includes(order.status)).length;
-  const paidOrders = orders.filter((order) => order.payment_status === "Paid").length;
-
-  function dateFilterFn(rangeKey, order) {
-    const d = order.created_at ? new Date(order.created_at) : new Date();
-    const now = new Date();
-    if (rangeKey === "today") {
-      return d.toDateString() === now.toDateString();
-    }
-    if (rangeKey === "7d") {
-      return (now - d) / (1000 * 60 * 60 * 24) <= 7;
-    }
-    if (rangeKey === "30d") {
-      return (now - d) / (1000 * 60 * 60 * 24) <= 30;
-    }
-    if (rangeKey === "month") {
-      return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
-    }
-    return true;
-  }
-
-  const filteredByDate = useMemo(() => orders.filter((o) => dateFilterFn(dateRange, o)), [orders, dateRange]);
-
-  const metrics = useMemo(() => {
-    const list = filteredByDate;
-    const totalRevenue = list.reduce((sum, o) => sum + (Number(o.total) || 0), 0);
-    const cardRevenue = list.filter((o) => o.payment_method === "card").reduce((sum, o) => sum + (Number(o.total) || 0), 0);
-    const codRevenue = list.filter((o) => o.payment_method === "cod").reduce((sum, o) => sum + (Number(o.total) || 0), 0);
-    const deliveredCount = list.filter((o) => o.status === "Delivered").length;
-    const cancelledCount = list.filter((o) => o.status === "Cancelled").length;
-    const activeCount = list.filter((o) => !["Delivered", "Cancelled"].includes(o.status)).length;
-    return { totalRevenue, cardRevenue, codRevenue, deliveredCount, cancelledCount, activeCount, count: list.length };
-  }, [filteredByDate]);
-
-  const displayedOrders = useMemo(() => {
-    return filteredByDate.filter((o) => {
-      if (orderTab === "active") return !["Delivered", "Cancelled"].includes(o.status);
-      if (orderTab === "delivered") return o.status === "Delivered";
-      if (orderTab === "cancelled") return o.status === "Cancelled";
-      return true;
-    });
-  }, [filteredByDate, orderTab]);
-
-  function toggleExpand(orderId) {
-    setExpandedOrders((prev) => ({ ...prev, [orderId]: !prev[orderId] }));
-  }
-
-  function statusColor(status) {
-    switch (status) {
-      case "Delivered": return "#2e7d32";
-      case "Cancelled": return "#c62828";
-      case "Out for delivery": return "#ef6c00";
-      case "Preparing": return "#6a1b9a";
-      case "Confirmed": return "#1565c0";
-      case "New": return "#00695c";
-      default: return "#555";
-    }
   }
 
   return (
