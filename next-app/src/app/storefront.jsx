@@ -232,7 +232,7 @@ export default function Storefront() {
     if (!savedToDb && supabase) {
       try {
         console.log("[Checkout] API failed - trying direct Supabase insert as backup...");
-        const dbOrderPayload = {
+        const fullPayload = {
           id: order.id,
           order_number: order.order_number,
           confirmation_code: order.confirmation_code,
@@ -248,15 +248,26 @@ export default function Storefront() {
           delivery_fee: order.delivery_fee,
           status: "New",
         };
-        const saved = await supabase.from("orders").insert(dbOrderPayload).select().single();
-        if (saved.error) {
-          console.error("[Checkout] Direct Supabase insert error:", saved.error.message);
-          dbErrorMsg = saved.error.message;
-        } else {
-          savedToDb = true;
-          if (saved.data) finalOrder = { ...saved.data, items: order.items };
-          console.log("[Checkout] Direct Supabase insert succeeded.");
 
+        const fallbackStrategies = [
+          fullPayload,
+          (() => { const { paystack_reference, ...r } = fullPayload; return r; })(),
+          (() => { const { paystack_reference, status, ...r } = fullPayload; return r; })(),
+        ];
+
+        let directSuccess = null;
+        let directErr = null;
+        for (const payload of fallbackStrategies) {
+          const res = await supabase.from("orders").insert(payload).select().single();
+          if (!res.error && res.data) { directSuccess = res.data; break; }
+          directErr = res.error;
+          console.warn("[Checkout] Direct strategy failed:", res.error?.message);
+        }
+
+        if (directSuccess) {
+          savedToDb = true;
+          finalOrder = { ...directSuccess, items: order.items };
+          console.log("[Checkout] Direct Supabase insert succeeded.");
           const itemsPayload = cart.map((item) => ({
             order_id: order.id,
             product_id: item.id && !String(item.id).startsWith("temp") ? item.id : null,
@@ -269,6 +280,8 @@ export default function Storefront() {
           if (itemsRes.error) {
             console.warn("[Checkout] order_items insert warning:", itemsRes.error.message);
           }
+        } else {
+          dbErrorMsg = directErr?.message || dbErrorMsg || "Unknown database error";
         }
       } catch (err) {
         dbErrorMsg = err?.message || dbErrorMsg || "Unknown database error";
