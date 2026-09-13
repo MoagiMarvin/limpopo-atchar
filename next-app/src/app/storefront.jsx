@@ -30,7 +30,7 @@ export default function Storefront() {
   const [selectedCategory, setSelectedCategory] = useState("All");
   const [busy, setBusy] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState("cod"); // 'cod' | 'card'
-  const deliveryFee = 30;
+  const deliveryFee = 20;
 
   useEffect(() => {
     async function loadProducts() {
@@ -116,7 +116,6 @@ export default function Storefront() {
       }
       setCart([...cart, { ...product, quantity: qtyToAdd }]);
     }
-    setNotice(`Added ${qtyToAdd}x ${product.name} (${product.size}) to cart.`);
   }
 
   function updateCartQuantity(index, newQty) {
