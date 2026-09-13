@@ -4,6 +4,8 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { createClient } from "@supabase/supabase-js";
 
+const BRAND_LOGO = "/mango-atchar.png";
+
 const supabase = process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY 
   ? createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY) 
   : null;
@@ -479,7 +481,10 @@ export default function AdminPage() {
       <main className="admin-login">
         {loginMode === "supabase" ? (
           <form className="admin-login-card" onSubmit={signInWithSupabase}>
-            <p className="kicker">Limpopo Atchar</p>
+            <div className="login-brand">
+              <img src={BRAND_LOGO} alt="" className="login-brand-logo" onError={(e) => { e.currentTarget.src = "/mango-atchar-fallback.png"; }} />
+              <p className="kicker">Limpopo Atchar</p>
+            </div>
             <h1>Admin Login</h1>
             <p>Sign in with your Supabase Email & Password.</p>
             <input
@@ -514,7 +519,10 @@ export default function AdminPage() {
           </form>
         ) : (
           <form className="admin-login-card" onSubmit={handlePassLogin}>
-            <p className="kicker">Limpopo Atchar</p>
+            <div className="login-brand">
+              <img src={BRAND_LOGO} alt="" className="login-brand-logo" onError={(e) => { e.currentTarget.src = "/mango-atchar-fallback.png"; }} />
+              <p className="kicker">Limpopo Atchar</p>
+            </div>
             <h1>Admin Passcode</h1>
             <p>Enter Admin Password to access dashboard.</p>
             <input
@@ -549,7 +557,8 @@ export default function AdminPage() {
     <main className="admin-shell">
       <aside className="admin-sidebar">
         <Link href="/" className="admin-brand">
-          LIMPOPO <small>ATCHAR</small>
+          <img src={BRAND_LOGO} alt="" className="admin-brand-logo" onError={(e) => { e.currentTarget.src = "/mango-atchar-fallback.png"; }} />
+          <div>LIMPOPO <small>ATCHAR</small></div>
         </Link>
         <div className="admin-sidebar-nav">
           <button className={view === "orders" ? "selected" : ""} onClick={() => setView("orders")}>

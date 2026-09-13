@@ -7,9 +7,11 @@ body{margin:0;overflow-x:hidden;font-family:Arial,Helvetica,sans-serif;color:var
 .topbar span,.topbar a{white-space:nowrap}
 .topbar a{color:#fff;text-decoration:none}
 .nav{height:104px;display:flex;align-items:center;padding:0 6%;gap:45px;background:#fff;border-bottom:1px solid #eee;position:sticky;top:0;z-index:30}
-.brand{width:290px;color:var(--green);font:700 34px Georgia,serif;line-height:.85;text-decoration:none}
-.brand small{display:block;text-align:center;font:700 12px Arial;letter-spacing:5px;margin-top:10px}
-.brand i{display:block;font:12px Arial;color:#38542e;margin-top:10px;text-align:left;font-style:normal}
+.brand{width:370px;display:flex;align-items:center;gap:14px;color:var(--green);text-decoration:none}
+.brand-logo{width:66px;height:66px;border-radius:50%;object-fit:cover;flex-shrink:0;border:2px solid #f6c23e;box-shadow:0 2px 6px rgba(0,0,0,.08)}
+.brand-text{font:700 32px Georgia,serif;line-height:.85}
+.brand-text small{display:block;font:700 12px Arial;letter-spacing:5px;margin-top:8px;text-align:left}
+.brand-text i{display:block;font:12px Arial;color:#38542e;margin-top:8px;font-style:normal}
 .nav nav{display:flex;gap:30px;align-items:center;margin-left:auto}
 .nav nav a{color:#1c1d1c;font-weight:600;font-size:15px;text-decoration:none}
 .nav nav a:hover{color:var(--green2)}
@@ -181,8 +183,12 @@ footer a{color:#fff;text-decoration:none}
 .admin-error{color:#a32626!important;font-size:13px}
 .admin-shell{min-height:100vh;display:flex;background:#f7f8f4;font-family:Arial,Helvetica,sans-serif}
 .admin-sidebar{width:235px;display:flex;flex-direction:column;gap:6px;padding:28px 16px;background:var(--green);color:#fff}
-.admin-brand{margin:0 10px 28px;color:#fff;text-decoration:none;font:700 25px Georgia}
-.admin-brand small{display:block;text-align:center;font:700 9px Arial;letter-spacing:4px}
+.admin-brand{margin:0 10px 28px;color:#fff;text-decoration:none;font:700 25px Georgia;display:flex;align-items:center;gap:12px}
+.admin-brand-logo{width:46px;height:46px;border-radius:50%;object-fit:cover;border:2px solid #f6c23e;flex-shrink:0}
+.admin-brand small{display:block;font:700 9px Arial;letter-spacing:4px;text-align:left}
+.login-brand{display:flex;align-items:center;gap:12px;margin-bottom:6px}
+.login-brand-logo{width:58px;height:58px;border-radius:50%;object-fit:cover;border:2px solid #f6c23e;box-shadow:0 2px 8px rgba(0,0,0,.08)}
+.login-brand .kicker{margin:0}
 .admin-sidebar-nav{display:flex;flex-direction:column;gap:6px;width:100%}
 .admin-sidebar button{padding:13px 14px;border:0;border-radius:4px;background:transparent;color:#fff;text-align:left;cursor:pointer;font-weight:700;min-height:44px}
 .admin-sidebar button.selected,.admin-sidebar button:hover{background:#ffffff20}
@@ -286,7 +292,10 @@ footer a{color:#fff;text-decoration:none}
 @media(max-width:1000px){
   .nav nav{gap:14px}
   .nav{gap:15px;padding:0 4%}
-  .brand{width:220px}
+  .brand{width:auto;flex:1}
+  .brand-logo{width:52px;height:52px}
+  .brand-text{font-size:24px}
+  .brand-text small{font-size:10px;letter-spacing:4px;margin-top:6px}
   .hero h1{font-size:39px}
   .products{grid-template-columns:repeat(2,1fr);gap:14px}
   .product{min-height:0}
@@ -298,9 +307,11 @@ footer a{color:#fff;text-decoration:none}
   .topbar{height:28px;padding:0 3%;font-size:10px}
   .topbar span:nth-child(2){display:none}
   .nav{height:64px;padding:0 4%;gap:8px}
-  .brand{font-size:22px;flex:1;width:auto;line-height:1}
-  .brand small{font-size:9px;letter-spacing:3px;margin-top:4px;text-align:left}
-  .brand i{display:none!important}
+  .brand{font-size:22px;flex:1;width:auto;line-height:1;gap:8px}
+  .brand-logo{width:42px;height:42px;border-width:1.5px}
+  .brand-text{font-size:18px}
+  .brand-text small{font-size:9px;letter-spacing:3px;margin-top:3px;text-align:left}
+  .brand-text i{display:none!important}
   .nav nav{display:none}
   .menu{display:block;border:0;background:none;color:var(--green);font-size:26px;min-width:44px;min-height:44px}
   .hero{display:block!important;aspect-ratio:1757/820!important}
@@ -471,13 +482,16 @@ footer a{color:#fff;text-decoration:none}
     margin: 0 0 10px 0;
     text-align: center;
     font-size: 22px;
+    justify-content: center;
   }
+  .admin-brand-logo{width:36px;height:36px}
+  .login-brand{justify-content:center}
   .admin-sidebar-nav{
     flex-direction: row;
     flex-wrap: wrap;
     gap: 6px;
   }
-  .admin-sidebar button{
+  .admin-sidebar-nav button{
     flex: 1;
     min-width: 80px;
     padding: 10px 6px;
@@ -486,19 +500,48 @@ footer a{color:#fff;text-decoration:none}
     border-radius: 6px;
     background: rgba(255,255,255,0.12);
     min-height:44px;
+    border:0;
+    color:#fff;
+    cursor:pointer;
+    font-weight:700;
   }
-  .admin-sidebar button.selected{
+  .admin-sidebar-nav button.selected{
     background: #fff;
     color: var(--green);
   }
-  .admin-sidebar button b{
+  .admin-sidebar-nav button b{
     float: none;
     display: inline-block;
     margin-left: 4px;
   }
   .admin-sidebar .admin-signout{
-    margin-top: 0;
+    margin-top: 6px;
     background: rgba(255,255,255,0.18);
+    padding: 10px 14px;
+    font-size: 13px;
+    text-align: center;
+    border-radius: 6px;
+    min-height:44px;
+    width: 100%;
+    border:0;
+    color:#fff;
+    cursor:pointer;
+    font-weight:700;
+    flex: 0 0 auto;
+  }
+
+  /* Login card – compact mobile */
+  .admin-login-card{
+    padding: 24px 20px 28px;
+    border-radius: 10px;
+  }
+  .admin-login-card h1{
+    font-size: 26px;
+    margin: 6px 0 8px;
+  }
+  .login-brand-logo{
+    width: 46px;
+    height: 46px;
   }
   .admin-content{
     padding: 20px 14px;
@@ -673,6 +716,14 @@ footer a{color:#fff;text-decoration:none}
   .pay-icon{font-size:20px}
   .payment{padding:9px 11px;font-size:12.5px;margin:10px 0}
   .payment-method-label{font-size:12px;margin-bottom:8px}
+
+  /* Tiny screen – extra compact login */
+  .admin-login{padding:12px 8px}
+  .admin-login-card{padding:20px 16px 22px;border-radius:8px}
+  .admin-login-card h1{font-size:22px;margin:4px 0 6px}
+  .admin-login-card p{font-size:13px;line-height:1.4}
+  .login-brand-logo{width:40px;height:40px}
+  .login-brand{gap:8px;margin-bottom:4px}
 
   footer{display:block;padding:20px 6%}
   footer>*{display:block;margin-bottom:14px}
