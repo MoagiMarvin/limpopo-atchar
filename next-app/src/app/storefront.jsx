@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { createClient } from "@supabase/supabase-js";
 
-const BRAND_LOGO = "/mango-atchar.png";
+const BRAND_LOGO = "/Limpopo%20logo.png";
 
 const fallbackProducts = [
   { id: "1", name: "Mango Atchar", category: "Mango Atchar", size: "1kg", price: 80, badge: "Best Seller", stock: 50, image: "/mango-atchar.png", active: true },
@@ -417,7 +417,7 @@ export default function Storefront() {
 
       <header className="nav">
         <a className="brand" href="#home">
-          <img src={BRAND_LOGO} alt="Limpopo Atchar Logo" className="brand-logo" onError={(e) => { e.currentTarget.src = "/mango-atchar-fallback.png"; }} />
+          <img src={BRAND_LOGO} alt="Limpopo Atchar Logo" className="brand-logo" onError={(e) => { const t = e.currentTarget; if (!t.dataset.fallback) { t.dataset.fallback = "1"; t.src = "/mango-atchar.png"; } else if (t.dataset.fallback === "1") { t.dataset.fallback = "2"; t.src = "/mango-atchar-fallback.png"; } else { t.onerror = null; } }} />
           <div className="brand-text">
             LIMPOPO <small>ATCHAR</small><i>Traditional Taste. Homemade with Love.</i>
           </div>

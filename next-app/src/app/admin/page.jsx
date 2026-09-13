@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { createClient } from "@supabase/supabase-js";
 
-const BRAND_LOGO = "/mango-atchar.png";
+const BRAND_LOGO = "/Limpopo%20logo.png";
 
 const supabase = process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY 
   ? createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY) 
@@ -482,7 +482,7 @@ export default function AdminPage() {
         {loginMode === "supabase" ? (
           <form className="admin-login-card" onSubmit={signInWithSupabase}>
             <div className="login-brand">
-              <img src={BRAND_LOGO} alt="" className="login-brand-logo" onError={(e) => { e.currentTarget.src = "/mango-atchar-fallback.png"; }} />
+              <img src={BRAND_LOGO} alt="" className="login-brand-logo" onError={(e) => { const t = e.currentTarget; if (!t.dataset.fallback) { t.dataset.fallback = "1"; t.src = "/mango-atchar.png"; } else if (t.dataset.fallback === "1") { t.dataset.fallback = "2"; t.src = "/mango-atchar-fallback.png"; } else { t.onerror = null; } }} />
               <p className="kicker">Limpopo Atchar</p>
             </div>
             <h1>Admin Login</h1>
@@ -520,7 +520,7 @@ export default function AdminPage() {
         ) : (
           <form className="admin-login-card" onSubmit={handlePassLogin}>
             <div className="login-brand">
-              <img src={BRAND_LOGO} alt="" className="login-brand-logo" onError={(e) => { e.currentTarget.src = "/mango-atchar-fallback.png"; }} />
+              <img src={BRAND_LOGO} alt="" className="login-brand-logo" onError={(e) => { const t = e.currentTarget; if (!t.dataset.fallback) { t.dataset.fallback = "1"; t.src = "/mango-atchar.png"; } else if (t.dataset.fallback === "1") { t.dataset.fallback = "2"; t.src = "/mango-atchar-fallback.png"; } else { t.onerror = null; } }} />
               <p className="kicker">Limpopo Atchar</p>
             </div>
             <h1>Admin Passcode</h1>
@@ -557,7 +557,7 @@ export default function AdminPage() {
     <main className="admin-shell">
       <aside className="admin-sidebar">
         <Link href="/" className="admin-brand">
-          <img src={BRAND_LOGO} alt="" className="admin-brand-logo" onError={(e) => { e.currentTarget.src = "/mango-atchar-fallback.png"; }} />
+          <img src={BRAND_LOGO} alt="" className="admin-brand-logo" onError={(e) => { const t = e.currentTarget; if (!t.dataset.fallback) { t.dataset.fallback = "1"; t.src = "/mango-atchar.png"; } else if (t.dataset.fallback === "1") { t.dataset.fallback = "2"; t.src = "/mango-atchar-fallback.png"; } else { t.onerror = null; } }} />
           <div>LIMPOPO <small>ATCHAR</small></div>
         </Link>
         <div className="admin-sidebar-nav">
