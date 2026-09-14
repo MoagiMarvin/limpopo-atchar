@@ -74,9 +74,18 @@ export const metadata = {
   alternates: {
     canonical: SITE_URL,
   },
-  themeColor: "#0a3d1c",
+};
+
+export const viewport = {
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#0a3d1c" },
+    { media: "(prefers-color-scheme: dark)", color: "#0a3d1c" },
+  ],
+  colorScheme: "light",
+  width: "device-width",
+  initialScale: 1,
 };
 
 export default function RootLayout({ children }) {
-  return <html lang="en"><body>{children}</body></html>;
+  return <html lang="en" data-scroll-behavior="smooth"><body>{children}</body></html>;
 }

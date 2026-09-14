@@ -242,15 +242,60 @@ export default function RefundPolicyPage() {
       </main>
 
       <footer id="contact" className="policy-footer">
-        <strong>LIMPOPO ATCHAR</strong>
-        <a href={whatsapp} target="_blank" rel="noreferrer">
-          WhatsApp Orders: {phoneDisplay}
-        </a>
-        <a href="/refund-policy">Refund &amp; Cancellation Policy</a>
-        <a href="/admin">Admin</a>
-        <p className="footer-copy">
-          © {new Date().getFullYear()} Limpopo Atchar. All rights reserved.
-        </p>
+        <div className="footer-inner">
+          <div className="footer-col footer-brand">
+            <img
+              src="/Limpopo%20logo.png"
+              alt="Limpopo Atchar Logo"
+              className="footer-logo"
+              onError={(e) => {
+                const t = e.currentTarget;
+                if (!t.dataset.fallback) { t.dataset.fallback = "1"; t.src = "/mango-atchar.png"; }
+                else if (t.dataset.fallback === "1") { t.dataset.fallback = "2"; t.src = "/mango-atchar-fallback.png"; }
+                else { t.onerror = null; }
+              }}
+            />
+            <h3 className="footer-title">LIMPOPO ATCHAR</h3>
+            <p className="footer-tagline">
+              Traditional taste, homemade with love. Small-batch atchar from Limpopo in convenient plastic tubs.
+            </p>
+          </div>
+
+          <div className="footer-col">
+            <h4 className="footer-heading">Shop</h4>
+            <ul className="footer-links">
+              <li><Link href="/#home">Home</Link></li>
+              <li><Link href="/#products">Products</Link></li>
+              <li><Link href="/#about">About Us</Link></li>
+              <li><Link href="/#recipes">Serving Ideas</Link></li>
+            </ul>
+          </div>
+
+          <div className="footer-col">
+            <h4 className="footer-heading">Help &amp; Contact</h4>
+            <ul className="footer-links">
+              <li>
+                <a href={whatsapp} target="_blank" rel="noreferrer">
+                  💬 WhatsApp: {phoneDisplay}
+                </a>
+              </li>
+              <li><a href="/refund-policy">Refund &amp; Cancellation</a></li>
+              <li>
+                <a href="mailto:info@limpopoatchar.co.za">
+                  ✉️ info@limpopoatchar.co.za
+                </a>
+              </li>
+              <li>
+                <a href="/admin">🔐 Admin Dashboard</a>
+              </li>
+            </ul>
+          </div>
+        </div>
+
+        <div className="footer-bottom">
+          <p>© {new Date().getFullYear()} Limpopo Atchar. All rights reserved.</p>
+          <p className="footer-location">📍 Limpopo, South Africa</p>
+        </div>
       </footer>
     </>
   );
