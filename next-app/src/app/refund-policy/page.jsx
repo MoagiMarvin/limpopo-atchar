@@ -248,12 +248,6 @@ export default function RefundPolicyPage() {
               src="/Limpopo%20logo.png"
               alt="Limpopo Atchar Logo"
               className="footer-logo"
-              onError={(e) => {
-                const t = e.currentTarget;
-                if (!t.dataset.fallback) { t.dataset.fallback = "1"; t.src = "/mango-atchar.png"; }
-                else if (t.dataset.fallback === "1") { t.dataset.fallback = "2"; t.src = "/mango-atchar-fallback.png"; }
-                else { t.onerror = null; }
-              }}
             />
             <h3 className="footer-title">LIMPOPO ATCHAR</h3>
             <p className="footer-tagline">
