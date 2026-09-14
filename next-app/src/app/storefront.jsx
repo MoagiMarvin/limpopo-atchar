@@ -504,7 +504,9 @@ export default function Storefront() {
       <footer id="contact">
         <strong>LIMPOPO ATCHAR</strong>
         <a href="https://wa.me/27637326719" target="_blank" rel="noreferrer">WhatsApp Orders: 063 732 6719</a>
+        <a href="/refund-policy">Refund & Cancellation Policy</a>
         <a href="/admin">Admin</a>
+        <p className="footer-copy">© {new Date().getFullYear()} Limpopo Atchar. All rights reserved.</p>
       </footer>
 
       {/* Cart Drawer with Quantity Controls */}
