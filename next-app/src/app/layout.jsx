@@ -18,21 +18,6 @@ export const metadata = {
   authors: [{ name: SITE_NAME, url: SITE_URL }],
   keywords: ["atchar", "limpopo", "mango atchar", "south africa", "homemade atchar", "traditional atchar", "mango", "achar", "pickle"],
   category: "Food & Drink",
-  icons: {
-    icon: [
-      { url: BRAND_LOGO_URL, type: "image/png", sizes: "any" },
-      { url: BRAND_LOGO_URL, type: "image/png", sizes: "32x32" },
-      { url: BRAND_LOGO_URL, type: "image/png", sizes: "48x48" },
-      { url: BRAND_LOGO_URL, type: "image/png", sizes: "64x64" },
-    ],
-    shortcut: BRAND_LOGO_URL,
-    apple: [
-      { url: BRAND_LOGO_URL, sizes: "180x180", type: "image/png" },
-    ],
-    other: [
-      { rel: "apple-touch-icon-precomposed", url: BRAND_LOGO_URL },
-    ],
-  },
   manifest: "/site.webmanifest",
   openGraph: {
     type: "website",
