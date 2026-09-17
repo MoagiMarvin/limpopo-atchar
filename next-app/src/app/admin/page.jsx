@@ -502,7 +502,7 @@ export default function AdminPage() {
               onChange={(e) => setLogin({ ...login, password: e.target.value })}
             />
             <button className="admin-primary" disabled={busy}>
-              {busy ? "Signing in..." : "Sign in with Supabase"}
+              {busy ? "Signing in..." : "Sign in"}
             </button>
             
             <div style={{ display: "flex", justifyContent: "space-between", marginTop: "14px", fontSize: "13px" }}>
