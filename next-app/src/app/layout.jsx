@@ -1,7 +1,7 @@
 import "./globals.css";
 
 export const BRAND_LOGO_URL = "/Limpopo%20logo.png";
-const SITE_URL = "https://limpopoatchar.co.za";
+const SITE_URL = "https://www.limpopoatchar.co.za";
 const FULL_LOGO_URL = `${SITE_URL}${BRAND_LOGO_URL}`;
 const SITE_NAME = "Limpopo Atchar";
 const DEFAULT_TITLE = "Limpopo Atchar | Traditional Taste";
